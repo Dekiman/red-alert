@@ -1,42 +1,11 @@
 {
-  "name": "red-alert-stream",
-  "version": "1.0.0",
-  "description": "WebSocket client for Israel red alerts with location/time normalization",
-  "type": "module",
+  "name": "red-alert",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "clean": "tsx scripts/clean.ts",
-    "dev": "npm run dev:frontend",
-    "dev:frontend": "vite --config frontend/vite.config.ts",
-    "dev:backend": "tsx watch backend/src/index.ts",
-    "build:backend": "tsc -p backend/tsconfig.json",
-    "build:frontend": "vite build --config frontend/vite.config.ts",
-    "build": "npm run clean && npm run build:backend && npm run build:frontend",
-    "start": "npm run build && node dist/backend/index.js",
-    "typecheck": "tsc -p backend/tsconfig.json --noEmit && tsc -p frontend/tsconfig.json --noEmit",
-    "db:inspect": "tsx scripts/db-inspect.ts",
-    "mock:replay-alert": "tsx scripts/replay-alert-from-db.ts",
-    "import:historical-alerts": "tsx scripts/import-historical-alerts.ts",
-    "import:historical-gdelt-news": "tsx scripts/import-historical-gdelt-news.ts",
-    "import:official-alert-history": "tsx scripts/import-official-oref-alert-history.ts",
-    "import:alert-history-with-fallback": "tsx scripts/import-official-oref-alert-history.ts --enable-non-official-fallback"
-  },
-  "dependencies": {
-    "@types/topojson-client": "^3.1.5",
-    "express": "^5.1.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "three": "^0.183.2",
-    "topojson-client": "^3.1.0",
-    "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.1.10",
-    "@types/react-dom": "^19.1.7",
-    "@vitejs/plugin-react": "^5.1.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "vite": "^7.1.7"
+    "dev:backend": "bun --filter backend dev",
+    "dev:frontend": "bun --filter frontend dev",
+    "build": "bun --filter '*' build",
+    "deploy": "bun --filter backend deploy && bun --filter frontend deploy"
   }
 }

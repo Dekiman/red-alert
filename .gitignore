@@ -1,0 +1,5 @@
+dist/
+*.tsbuildinfo
+data/
+node_modules/
+Guidelines.md

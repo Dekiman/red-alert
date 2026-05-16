@@ -1,9 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "strict": false,
-    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmitOnError": true
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "paths": {
+      "@red-alert/shared": ["./packages/shared/src/index.ts"]
+    }
   }
 }
