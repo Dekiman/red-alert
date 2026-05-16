@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss()
     ],
     build: {
-      outDir: path.resolve(__dirname, "../../dist/frontend"),
+      outDir: "dist",
       emptyOutDir: true
     },
     server: {

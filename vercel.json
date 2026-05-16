@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bun run build",
-  "outputDirectory": "dist/frontend",
+  "buildCommand": "bun --filter frontend build",
+  "outputDirectory": "apps/frontend/dist",
   "installCommand": "bun install"
 }
