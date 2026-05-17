@@ -26,6 +26,13 @@ function resolveSocketUrl(socketPath: string) {
     return socketPath;
   }
 
+  const backendTarget = import.meta.env.VITE_BACKEND_TARGET;
+  if (backendTarget && backendTarget.startsWith("http")) {
+    const wsUrl = backendTarget.replace(/^http/, "ws");
+    const normalizedSocketPath = socketPath.startsWith("/") ? socketPath : `/${socketPath}`;
+    return `${wsUrl}${normalizedSocketPath}`;
+  }
+
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const normalizedSocketPath = socketPath.startsWith("/") ? socketPath : `/${socketPath}`;
   return `${wsProtocol}//${window.location.host}${normalizedSocketPath}`;
