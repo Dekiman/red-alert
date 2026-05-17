@@ -1,4 +1,5 @@
-import { firstDefined, normalizeSourceTypeValue, parseSourceTypes } from "./normalizers.js";
+import { firstDefined } from "../../utils/primitives.js";
+import { normalizeSourceTypeValue, parseSourceTypes } from "./normalizers.js";
 import type { RealtimeTriggerTablesSet, SourceTypesSet } from "./types.js";
 
 export function extractEventsPayload(rawPayload: any) {

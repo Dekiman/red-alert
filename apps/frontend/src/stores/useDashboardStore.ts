@@ -1,36 +1,75 @@
-import { create } from "zustand";
-import type { Alert, NewsEvent } from "@red-alert/shared";
+import { createStore } from "zustand/vanilla";
+import { useStore } from "zustand";
+import { zustandStateStore } from "@json-render/zustand";
+import type { AlertPayload, NewsEventPayload } from "../app/contracts.js";
 
 interface DashboardState {
-  alerts: Alert[];
-  newsEvents: NewsEvent[];
+  alerts: AlertPayload[];
+  newsEvents: NewsEventPayload[];
   connectionState: "live" | "down" | "connecting";
+  connectionText: string;
   uiClients: number;
   bufferedAlerts: number;
   bufferedNewsEvents: number;
   updatedAt: string;
-  setAlerts: (alerts: Alert[]) => void;
-  addAlert: (alert: Alert) => void;
-  setNewsEvents: (events: NewsEvent[]) => void;
-  addNewsEvent: (event: NewsEvent) => void;
-  setConnectionState: (state: "live" | "down" | "connecting") => void;
+  setAlerts: (alerts: AlertPayload[]) => void;
+  addAlert: (alert: AlertPayload) => void;
+  setNewsEvents: (events: NewsEventPayload[]) => void;
+  addNewsEvent: (event: NewsEventPayload) => void;
+  setConnectionState: (state: "live" | "down" | "connecting", text?: string) => void;
   setStats: (stats: { uiClients: number; bufferedAlerts: number; bufferedNewsEvents: number }) => void;
   setUpdatedAt: (time: string) => void;
 }
 
-export const useDashboardStore = create<DashboardState>((set) => ({
+export const dashboardStore = createStore<DashboardState>((set) => ({
   alerts: [],
   newsEvents: [],
   connectionState: "connecting",
+  connectionText: "Connecting...",
   uiClients: 0,
   bufferedAlerts: 0,
   bufferedNewsEvents: 0,
-  updatedAt: "Never",
-  setAlerts: (alerts) => set({ alerts }),
-  addAlert: (alert) => set((state) => ({ alerts: [alert, ...state.alerts].slice(0, 150) })),
-  setNewsEvents: (newsEvents) => set({ newsEvents }),
-  addNewsEvent: (event) => set((state) => ({ newsEvents: [event, ...state.newsEvents].slice(0, 1000) })),
-  setConnectionState: (connectionState) => set({ connectionState }),
-  setStats: (stats) => set({ ...stats }),
-  setUpdatedAt: (updatedAt) => set({ updatedAt }),
+  updatedAt: "-",
+  setAlerts: (alerts) => set((state) => {
+    if (state.alerts === alerts) return state;
+    return { alerts };
+  }),
+  addAlert: (alert) => set((state) => {
+    const existing = state.alerts.find((a) => a.notificationId === alert.notificationId);
+    if (existing) return state;
+    return { alerts: [alert, ...state.alerts].slice(0, 150) };
+  }),
+  setNewsEvents: (newsEvents) => set((state) => {
+    if (state.newsEvents === newsEvents) return state;
+    return { newsEvents };
+  }),
+  addNewsEvent: (event) => set((state) => {
+    const existing = state.newsEvents.find((e) => e.eventId === event.eventId);
+    if (existing) return state;
+    return { newsEvents: [event, ...state.newsEvents].slice(0, 150) };
+  }),
+  setConnectionState: (connectionState, connectionText) => set((state) => {
+    const text = connectionText ?? (connectionState === "live" ? "Connected" : connectionState === "down" ? "Disconnected" : "Connecting...");
+    if (state.connectionState === connectionState && state.connectionText === text) return state;
+    return { connectionState, connectionText: text };
+  }),
+  setStats: (stats) => set((state) => {
+    if (
+      state.uiClients === stats.uiClients &&
+      state.bufferedAlerts === stats.bufferedAlerts &&
+      state.bufferedNewsEvents === stats.bufferedNewsEvents
+    ) {
+      return state;
+    }
+    return { ...stats };
+  }),
+  setUpdatedAt: (updatedAt) => set((state) => {
+    if (state.updatedAt === updatedAt) return state;
+    return { updatedAt };
+  }),
 }));
+
+export const useDashboardStore = <T>(selector: (state: DashboardState) => T) => 
+  useStore(dashboardStore, selector);
+
+export const jsonRenderStore = zustandStateStore({ store: dashboardStore });

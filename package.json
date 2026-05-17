@@ -6,6 +6,13 @@
     "dev:backend": "bun --filter backend dev",
     "dev:frontend": "bun --filter frontend dev",
     "build": "bun --filter '*' build",
-    "deploy": "bun --filter backend deploy && bun --filter frontend deploy"
+    "deploy": "bun --filter backend deploy && bun --filter frontend deploy",
+    "lint": "oxlint .",
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "^7.0.0-dev.20260516.1",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "oxlint": "^1.65.0"
   }
 }

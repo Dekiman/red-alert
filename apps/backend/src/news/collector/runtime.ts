@@ -4,6 +4,7 @@ import { isEnglishNewsCandidate, resolveNewsSourceLanguage } from "../language-f
 import { normalizeSourceTypeValue } from "./normalizers.js";
 import { createOsintProviders } from "./providers.js";
 import type { ProviderCollectedEvent, ProviderSignalPair } from "./provider-types.js";
+import type { NewsRepository } from "../../persistence/index.js";
 
 const newsLogger = createLogger("news");
 const WEATHER_SOURCE_TYPE_VALUES = ["weather", "nws", "weather_canada", "meteoalarm"];
@@ -12,7 +13,7 @@ const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60_000;
 const TRANSIENT_ERROR_BASE_BACKOFF_MS = 15_000;
 const TRANSIENT_ERROR_MAX_BACKOFF_MS = 5 * 60_000;
 
-type LiveNewsCollectorOptions = {
+export type NewsCollectionPipelineOptions = {
   enabled?: boolean;
   englishOnly?: boolean;
   includeWeatherEvents?: boolean;
@@ -32,8 +33,7 @@ type LiveNewsCollectorOptions = {
   weatherCanadaApiUrl?: string;
   meteoalarmApiUrl?: string;
   database: {
-    saveLiveNewsEvent: (event: any, rawPayload: unknown) => { changed: boolean };
-    saveLiveNewsSignals: (eventId: string, signals: any[], rawSignals: unknown[]) => { inserted: number };
+    news: NewsRepository;
   };
   onNewsEvent: (event: any) => void;
 };
@@ -75,123 +75,57 @@ function parseRetryAfterHeader(value: string | null) {
   return delayMs > 0 ? delayMs : null;
 }
 
-export function createLiveNewsCollector({
-  enabled = true,
-  englishOnly = true,
-  includeWeatherEvents = false,
-  pollMs = 15000,
-  fetchTimeoutMs = 10000,
-  maxSignalsPerEvent = 3,
-  includeSourceTypes = includeWeatherEvents
-    ? [
-        "gdacs",
-        "gdelt",
-        "usgs",
-        "nws",
-        "weather_canada",
-        "meteoalarm",
-        "official",
-        "osint",
-        "news",
-        "disaster",
-        "earthquake",
-        "weather",
-        "warning"
-      ]
-    : ["gdacs", "gdelt", "usgs", "official", "osint", "news", "disaster", "earthquake"],
-  providerNames = includeWeatherEvents
-    ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm"]
-    : ["gdacs", "gdelt", "usgs"],
-  maxEventsPerProvider = 80,
-  gdacsApiUrl = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH",
-  gdacsLookbackDays = 14,
-  usgsApiUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
-  gdeltApiUrl = "https://api.gdeltproject.org/api/v2/doc/doc",
-  gdeltQuery = "(conflict OR missile OR strike OR earthquake OR flood OR wildfire)",
-  gdeltMaxRecords = 60,
-  nwsApiUrl = "https://api.weather.gov/alerts/active",
-  weatherCanadaApiUrl = "https://api.weather.gc.ca/collections/weather-alerts/items?f=json",
-  meteoalarmApiUrl = "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-rss-europe",
-  database,
-  onNewsEvent
-}: LiveNewsCollectorOptions) {
-  let running = false;
-  let pollingTimer: NodeJS.Timeout | undefined;
-  let refreshTimer: NodeJS.Timeout | undefined;
-  let refreshInFlight = false;
-  let refreshPending = false;
+export async function executeNewsCollectionPipeline(options: NewsCollectionPipelineOptions, reason: string) {
+  const {
+    enabled = true,
+    englishOnly = true,
+    includeWeatherEvents = false,
+    pollMs = 15000,
+    fetchTimeoutMs = 10000,
+    maxSignalsPerEvent = 3,
+    includeSourceTypes = includeWeatherEvents
+      ? [
+          "gdacs",
+          "gdelt",
+          "usgs",
+          "nws",
+          "weather_canada",
+          "meteoalarm",
+          "official",
+          "osint",
+          "news",
+          "disaster",
+          "earthquake",
+          "weather",
+          "warning"
+        ]
+      : ["gdacs", "gdelt", "usgs", "official", "osint", "news", "disaster", "earthquake"],
+    providerNames = includeWeatherEvents
+      ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm"]
+      : ["gdacs", "gdelt", "usgs"],
+    maxEventsPerProvider = 80,
+    gdacsApiUrl,
+    gdacsLookbackDays,
+    usgsApiUrl,
+    gdeltApiUrl,
+    gdeltQuery,
+    gdeltMaxRecords,
+    nwsApiUrl,
+    weatherCanadaApiUrl,
+    meteoalarmApiUrl,
+    database,
+    onNewsEvent
+  } = options;
 
-  const knownEventVersion = new Map<string, string>();
-  const providerBackoffByName = new Map<string, ProviderBackoffState>();
+  if (!enabled) {
+    return;
+  }
+
   const includeSourceTypesSet = new Set(
     (Array.isArray(includeSourceTypes) ? includeSourceTypes : [])
       .map((type) => normalizeSourceTypeValue(type))
       .filter(Boolean)
   );
-  const weatherSourceTypesSet = new Set(
-    WEATHER_SOURCE_TYPE_VALUES.map((sourceType) => normalizeSourceTypeValue(sourceType))
-  );
-
-  function getProviderBackoffState(providerName: string): ProviderBackoffState {
-    let state = providerBackoffByName.get(providerName);
-    if (!state) {
-      state = {
-        backoffUntilMs: 0,
-        rateLimitCount: 0,
-        transientErrorCount: 0
-      };
-      providerBackoffByName.set(providerName, state);
-    }
-    return state;
-  }
-
-  function clearProviderBackoff(providerName: string) {
-    const state = getProviderBackoffState(providerName);
-    state.backoffUntilMs = 0;
-    state.rateLimitCount = 0;
-    state.transientErrorCount = 0;
-  }
-
-  function applyProviderBackoff(providerName: string, error: unknown, reason: string) {
-    const state = getProviderBackoffState(providerName);
-    const nowMs = Date.now();
-
-    if (error instanceof HttpResponseError && error.status === 429) {
-      state.rateLimitCount += 1;
-      state.transientErrorCount = 0;
-      const computedBackoffMs =
-        error.retryAfterMs ??
-        Math.min(
-          Math.max(pollMs, RATE_LIMIT_BASE_BACKOFF_MS) * 2 ** Math.max(0, state.rateLimitCount - 1),
-          RATE_LIMIT_MAX_BACKOFF_MS
-        );
-      state.backoffUntilMs = nowMs + computedBackoffMs;
-      newsLogger.warn("osint provider rate limited; backing off", {
-        reason,
-        providerName,
-        status: error.status,
-        retryAfterMs: error.retryAfterMs,
-        backoffMs: computedBackoffMs,
-        nextAttemptAtIso: new Date(state.backoffUntilMs).toISOString()
-      });
-      return;
-    }
-
-    state.transientErrorCount += 1;
-    state.rateLimitCount = 0;
-    const computedBackoffMs = Math.min(
-      Math.max(pollMs, TRANSIENT_ERROR_BASE_BACKOFF_MS) * 2 ** Math.max(0, state.transientErrorCount - 1),
-      TRANSIENT_ERROR_MAX_BACKOFF_MS
-    );
-    state.backoffUntilMs = nowMs + computedBackoffMs;
-    newsLogger.warn("osint provider refresh failed", {
-      reason,
-      providerName,
-      error: error instanceof Error ? error.message : String(error ?? "unknown error"),
-      backoffMs: computedBackoffMs,
-      nextAttemptAtIso: new Date(state.backoffUntilMs).toISOString()
-    });
-  }
 
   async function fetchWithTimeout(url: string, acceptHeader: string) {
     const controller = new AbortController();
@@ -218,27 +152,23 @@ export function createLiveNewsCollector({
     }
   }
 
-  async function fetchJson(url: string) {
-    const response = await fetchWithTimeout(
-      url,
-      "application/geo+json, application/ld+json, application/json;q=0.95, text/plain;q=0.5, */*;q=0.1"
-    );
-    return await response.json();
-  }
-
-  async function fetchText(url: string) {
-    const response = await fetchWithTimeout(
-      url,
-      "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.95, text/plain;q=0.7, */*;q=0.1"
-    );
-    return await response.text();
-  }
-
   const providers = createOsintProviders({
     providerNames,
     includeWeatherProviders: includeWeatherEvents,
-    fetchJson,
-    fetchText,
+    fetchJson: async (url) => {
+      const response = await fetchWithTimeout(
+        url,
+        "application/geo+json, application/ld+json, application/json;q=0.95, text/plain;q=0.5, */*;q=0.1"
+      );
+      return await response.json();
+    },
+    fetchText: async (url) => {
+      const response = await fetchWithTimeout(
+        url,
+        "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.95, text/plain;q=0.7, */*;q=0.1"
+      );
+      return await response.text();
+    },
     maxEventsPerProvider,
     gdacsApiUrl,
     gdacsLookbackDays,
@@ -278,6 +208,10 @@ export function createLiveNewsCollector({
       return true;
     }
 
+    const weatherSourceTypesSet = new Set(
+      WEATHER_SOURCE_TYPE_VALUES.map((sourceType) => normalizeSourceTypeValue(sourceType))
+    );
+
     if (
       isWeatherNewsEvent(event) &&
       !Array.from(weatherSourceTypesSet).some((sourceType) => includeSourceTypesSet.has(sourceType))
@@ -288,76 +222,39 @@ export function createLiveNewsCollector({
     return normalizedSourceTypes.some((sourceType) => includeSourceTypesSet.has(sourceType));
   }
 
-  function eventPassesWeatherFilter(event: any) {
-    return includeWeatherEvents || !isWeatherNewsEvent(event);
-  }
+  async function processOneCollectedEvent(collected: ProviderCollectedEvent) {
+    const event = collected?.event;
+    if (!event?.eventId) return null;
+    if (!includeWeatherEvents && isWeatherNewsEvent(event)) return null;
+    if (englishOnly && !isEnglishNewsCandidate({
+      title: event?.title,
+      summary: event?.summary,
+      sourceLanguage: resolveNewsSourceLanguage(event, collected.rawEvent)
+    })) return null;
+    if (!eventPassesSourceFilter(event)) return null;
 
-  function eventPassesLanguageFilter(event: any, rawEvent: unknown) {
-    return (
-      !englishOnly ||
-      isEnglishNewsCandidate({
-        title: event?.title,
-        summary: event?.summary,
-        sourceLanguage: resolveNewsSourceLanguage(event, rawEvent)
-      })
-    );
-  }
+    const storedEvent = await database.news.getEvent(event.eventId);
+    const incomingVersion = getEventVersion(event);
+    const storedVersion = storedEvent ? getEventVersion(storedEvent) : null;
 
-  function schedulePolling() {
-    if (!running) {
-      return;
-    }
-    if (pollingTimer) {
-      clearTimeout(pollingTimer);
-    }
-    pollingTimer = setTimeout(() => {
-      triggerRefresh("poll");
-    }, pollMs);
-  }
-
-  function normalizeSignalPairs(signalPairsRaw: ProviderSignalPair[] | undefined) {
-    if (!Array.isArray(signalPairsRaw) || signalPairsRaw.length === 0) {
-      return [];
+    if (storedVersion === incomingVersion) {
+      return null;
     }
 
-    const normalizedPairs = signalPairsRaw
+    console.log(`[CollectionPipeline] Event ${event.eventId} changed or is new. Stored version: ${storedVersion}, Incoming version: ${incomingVersion}`);
+
+    await database.news.saveEvent(event, collected.rawEvent);
+
+    const normalizedPairs = (Array.isArray(collected.signals) ? collected.signals : [])
       .filter((pair) => pair && pair.normalized && pair.normalized.signalId)
       .slice(0, Math.max(1, maxSignalsPerEvent));
-
-    return normalizedPairs;
-  }
-
-  function processOneCollectedEvent(collected: ProviderCollectedEvent) {
-    const event = collected?.event;
-    if (!event?.eventId) {
-      return null;
-    }
-    if (!eventPassesWeatherFilter(event)) {
-      return null;
-    }
-    if (!eventPassesLanguageFilter(event, collected.rawEvent)) {
-      return null;
-    }
-    if (!eventPassesSourceFilter(event)) {
-      return null;
-    }
-
-    const version = getEventVersion(event);
-    const lastVersion = knownEventVersion.get(event.eventId);
-    const saveResult = database.saveLiveNewsEvent(event, collected.rawEvent);
-    const eventChanged = saveResult.changed || (lastVersion != null && lastVersion !== version);
-    knownEventVersion.set(event.eventId, version);
-    if (!eventChanged) {
-      return null;
-    }
-
-    const signalPairs = normalizeSignalPairs(collected.signals);
-    const normalizedSignals = signalPairs.map((pair) => pair.normalized);
+    
+    const normalizedSignals = normalizedPairs.map((pair) => pair.normalized);
     if (normalizedSignals.length > 0) {
-      database.saveLiveNewsSignals(
+      await database.news.saveSignals(
         event.eventId,
         normalizedSignals,
-        signalPairs.map((pair) => pair.raw)
+        normalizedPairs.map((pair) => pair.raw)
       );
     }
 
@@ -373,183 +270,74 @@ export function createLiveNewsCollector({
     };
   }
 
-  async function refresh(reason: string) {
-    if (!running) {
-      return;
-    }
+  try {
+    const nowMs = Date.now();
+    const settledResults = await Promise.all(
+      providers.map(async (provider) => {
+        const backoff = await database.news.getProviderBackoff(provider.name);
+        if (backoff && backoff.backoffUntilMs > nowMs) {
+          return { providerName: provider.name, events: [], error: null, skipped: true };
+        }
 
-    if (refreshInFlight) {
-      refreshPending = true;
-      return;
-    }
+        try {
+          console.log(`[CollectionPipeline] Fetching from ${provider.name}`);
+          const events = await provider.fetchEvents();
+          console.log(`[CollectionPipeline] Provider ${provider.name} returned ${events.length} events`);
+          
+          await database.news.setProviderBackoff(provider.name, {
+            backoffUntilMs: 0,
+            rateLimitCount: 0,
+            transientErrorCount: 0
+          });
 
-    refreshInFlight = true;
-    try {
-      const nowMs = Date.now();
-      const eligibleProviders = providers.filter((provider) => {
-        const state = getProviderBackoffState(provider.name);
-        return state.backoffUntilMs <= nowMs;
-      });
-
-      if (eligibleProviders.length === 0) {
-        newsLogger.debug("all osint providers are in backoff; skipping refresh", {
-          reason,
-          providers: providers.map((provider) => {
-            const state = getProviderBackoffState(provider.name);
-            return {
-              providerName: provider.name,
-              nextAttemptAtIso:
-                state.backoffUntilMs > nowMs ? new Date(state.backoffUntilMs).toISOString() : null
-            };
-          })
-        });
-        return;
-      }
-
-      const settledResults = await Promise.all(
-        eligibleProviders.map(async (provider) => {
-          try {
-            const events = await provider.fetchEvents();
-            clearProviderBackoff(provider.name);
-            return {
-              providerName: provider.name,
-              events,
-              error: null
-            };
-          } catch (error) {
-            return {
-              providerName: provider.name,
-              events: [] as ProviderCollectedEvent[],
-              error
-            };
+          return { providerName: provider.name, events, error: null };
+        } catch (error) {
+          console.error(`[CollectionPipeline] Provider ${provider.name} failed:`, error);
+          
+          const state = backoff || { backoffUntilMs: 0, rateLimitCount: 0, transientErrorCount: 0 };
+          
+          if (error instanceof HttpResponseError && error.status === 429) {
+            state.rateLimitCount += 1;
+            state.transientErrorCount = 0;
+            const backoffMs = error.retryAfterMs ?? Math.min(Math.max(pollMs, RATE_LIMIT_BASE_BACKOFF_MS) * 2 ** (state.rateLimitCount - 1), RATE_LIMIT_MAX_BACKOFF_MS);
+            state.backoffUntilMs = nowMs + backoffMs;
+          } else {
+            state.transientErrorCount += 1;
+            state.rateLimitCount = 0;
+            const backoffMs = Math.min(Math.max(pollMs, TRANSIENT_ERROR_BASE_BACKOFF_MS) * 2 ** (state.transientErrorCount - 1), TRANSIENT_ERROR_MAX_BACKOFF_MS);
+            state.backoffUntilMs = nowMs + backoffMs;
           }
-        })
-      );
 
-      const mergedEvents: ProviderCollectedEvent[] = [];
-      for (const settledResult of settledResults) {
-        if (settledResult.error) {
-          applyProviderBackoff(settledResult.providerName, settledResult.error, reason);
-          continue;
+          await database.news.setProviderBackoff(provider.name, state);
+          return { providerName: provider.name, events: [], error };
         }
+      })
+    );
 
-        mergedEvents.push(...settledResult.events);
-      }
+    const mergedEvents: ProviderCollectedEvent[] = [];
+    for (const res of settledResults) {
+      if (!res.error) mergedEvents.push(...res.events);
+    }
 
-      mergedEvents.sort((a, b) => String(b?.event?.updatedAtIso ?? "").localeCompare(String(a?.event?.updatedAtIso ?? "")));
+    mergedEvents.sort((a, b) => String(b?.event?.updatedAtIso ?? "").localeCompare(String(a?.event?.updatedAtIso ?? "")));
 
-      const emittedEventIds = new Set<string>();
-      let emitted = 0;
-      for (const collected of mergedEvents) {
-        const eventId = String(collected?.event?.eventId ?? "").trim();
-        if (!eventId || emittedEventIds.has(eventId)) {
-          continue;
-        }
-        emittedEventIds.add(eventId);
+    const emittedEventIds = new Set<string>();
+    let emitted = 0;
+    
+    for (const collected of mergedEvents) {
+      const eventId = String(collected?.event?.eventId ?? "").trim();
+      if (!eventId || emittedEventIds.has(eventId)) continue;
+      emittedEventIds.add(eventId);
 
-        const processedEvent = processOneCollectedEvent(collected);
-        if (!processedEvent) {
-          continue;
-        }
-        emitted += 1;
+      const processedEvent = await processOneCollectedEvent(collected);
+      if (processedEvent) {
+        emitted++;
         onNewsEvent(processedEvent);
       }
-
-      newsLogger.debug("osint refresh complete", {
-        reason,
-        providers: eligibleProviders.map((provider) => provider.name),
-        totalEventsSeen: mergedEvents.length,
-        emittedUpdates: emitted
-      });
-    } catch (error: any) {
-      newsLogger.error("osint refresh failed", {
-        reason,
-        error: error?.message
-      });
-    } finally {
-      refreshInFlight = false;
-      if (refreshPending) {
-        refreshPending = false;
-        void refresh("pending");
-      } else {
-        schedulePolling();
-      }
     }
+
+    console.log(`[CollectionPipeline] Process complete. Reason: ${reason}, Events seen: ${mergedEvents.length}, Emitted: ${emitted}`);
+  } catch (error: any) {
+    newsLogger.error("osint collection pipeline failed", { reason, error: error?.message });
   }
-
-  function triggerRefresh(reason: string, delayMs = 0) {
-    if (!running) {
-      return;
-    }
-
-    if (refreshTimer) {
-      clearTimeout(refreshTimer);
-      refreshTimer = undefined;
-    }
-
-    if (delayMs <= 0) {
-      void refresh(reason);
-      return;
-    }
-
-    refreshTimer = setTimeout(() => {
-      refreshTimer = undefined;
-      void refresh(reason);
-    }, delayMs);
-  }
-
-  return {
-    start() {
-      if (!enabled) {
-        newsLogger.info("live news collector disabled by config");
-        return;
-      }
-      if (running) {
-        return;
-      }
-
-      running = true;
-      newsLogger.info("starting osint global collector", {
-        providers: providers.map((provider) => provider.name),
-        pollMs,
-        fetchTimeoutMs,
-        maxSignalsPerEvent,
-        maxEventsPerProvider,
-        englishOnly,
-        includeWeatherEvents,
-        includeSourceTypes,
-        gdacsApiUrl,
-        gdacsLookbackDays,
-        usgsApiUrl,
-        gdeltApiUrl,
-        gdeltMaxRecords,
-        nwsApiUrl,
-        weatherCanadaApiUrl,
-        meteoalarmApiUrl
-      });
-      triggerRefresh("startup");
-    },
-    stop() {
-      if (!running) {
-        return;
-      }
-      running = false;
-
-      if (pollingTimer) {
-        clearTimeout(pollingTimer);
-        pollingTimer = undefined;
-      }
-      if (refreshTimer) {
-        clearTimeout(refreshTimer);
-        refreshTimer = undefined;
-      }
-      newsLogger.info("stopped osint global collector");
-    },
-    refreshNow() {
-      if (!running) {
-        return;
-      }
-      triggerRefresh("manual");
-    }
-  };
 }

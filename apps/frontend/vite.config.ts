@@ -8,11 +8,16 @@ import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 export default defineConfig(({ mode }) => {
   const envRoot = path.resolve(__dirname, "../..");
   const env = loadEnv(mode, envRoot, "");
-  const backendTarget = env.VITE_BACKEND_TARGET || "http://127.0.0.1:3030";
+  const backendTarget = env.VITE_BACKEND_TARGET || "http://127.0.0.1:8787";
 
   return {
     root: path.resolve(__dirname),
     publicDir: path.resolve(__dirname, "public"),
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
     plugins: [
       TanStackRouterVite(),
       react(),

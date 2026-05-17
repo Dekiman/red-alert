@@ -31,11 +31,15 @@ Useful scripts:
 
 Database file (default): `data/red_alerts.sqlite`
 
-Frontend URL (default): `http://127.0.0.1:3030`
+Frontend URL (default): `http://127.0.0.1:8787`
 - Includes two live panels:
   - Red alerts
   - Live news feed
-- Includes an Israel locality polygon map (cities/towns/kibbutzim/moshavim) sourced from tzevaadom lists data.
+- Includes a high-fidelity 3D Global Visualization:
+  - **Real-time Synchronization**: The globe's rotation and Sun/Moon positions are strictly tied to real-world UTC time.
+  - **Precision Controls**: Bounded zoom and 1:1 "true-to-cursor" rotation for stable navigation.
+  - **Zoom-Based LOD**: Geographic detail (national vs. local boundaries) dynamically fades in/out based on zoom level.
+  - **Red Alert Integration**: Includes an Israel locality polygon map (cities/towns/kibbutzim/moshavim) sourced from tzevaadom lists data.
   - Polygon states:
     - Neutral (default)
     - Pre-alert (`SYSTEM_MESSAGE` pre-warning) -> yellow
@@ -164,7 +168,7 @@ Each line in stdout is a JSON event:
 - `RED_ALERT_LOG_LEVEL` (default: `info`; options: `debug`, `info`, `warn`, `error`)
 - `RED_ALERT_LOG_ENGLISH_ONLY` (default: `true`; sanitizes non-English characters in log messages/context)
 - `RED_ALERT_WEB_HOST` (default: `127.0.0.1`)
-- `RED_ALERT_WEB_PORT` (default: `3030`)
+- `RED_ALERT_WEB_PORT` (default: `8787`)
 - `RED_ALERT_WEB_SOCKET_PATH` (default: `/ui-socket`)
 - `RED_ALERT_FRONTEND_PUBLIC_ROOT` (default: `dist/frontend`)
 - `RED_ALERT_UI_HISTORY_SIZE` (default: `100`)

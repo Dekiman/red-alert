@@ -80,7 +80,7 @@ function uniqueSortedNumbers(values: unknown[]) {
 export function createPolygonStateService(options: PolygonStateServiceOptions) {
   const { getDatabase, getLocalityMapIdsForLocations, logger } = options;
 
-  function getCurrentPolygonStates(query: PolygonStateInferenceQuery = {}): CurrentPolygonStatesPayload | null {
+  async function getCurrentPolygonStates(query: PolygonStateInferenceQuery = {}): Promise<CurrentPolygonStatesPayload | null> {
     const database = getDatabase();
     if (!database) {
       return null;
@@ -93,7 +93,7 @@ export function createPolygonStateService(options: PolygonStateServiceOptions) {
     const windowToUnix = Math.floor(nowMs / 1000);
     const windowFromUnix = Math.max(0, windowToUnix - windowSeconds);
 
-    const alerts = database.getAlertsForPolygonStateInference(windowFromUnix, windowToUnix, alertLimit);
+    const alerts = await database.getAlertsForPolygonStateInference(windowFromUnix, windowToUnix, alertLimit);
     const payload = inferCurrentPolygonStates({
       alerts,
       nowMs,
@@ -113,12 +113,12 @@ export function createPolygonStateService(options: PolygonStateServiceOptions) {
     return payload;
   }
 
-  function getPolygonReplayTimeline(query: {
+  async function getPolygonReplayTimeline(query: {
     rangeMinutes?: number;
     stateWindowMinutes?: number;
     alertLimit?: number;
     nowMs?: number;
-  } = {}): PolygonReplayTimelinePayload | null {
+  } = {}): Promise<PolygonReplayTimelinePayload | null> {
     const database = getDatabase();
     if (!database) {
       return null;
@@ -137,7 +137,7 @@ export function createPolygonStateService(options: PolygonStateServiceOptions) {
       Number.isFinite(Number(query.alertLimit)) ? query.alertLimit : adaptiveDefaultLimit
     );
 
-    const alerts = database.getAlertsForPolygonStateInference(rangeFromUnix, rangeToUnix, alertLimit);
+    const alerts = await database.getAlertsForPolygonStateInference(rangeFromUnix, rangeToUnix, alertLimit);
     const events = alerts
       .map((alert) => {
         const localityIds = uniqueSortedNumbers(getLocalityMapIdsForLocations(alert.locationNames));

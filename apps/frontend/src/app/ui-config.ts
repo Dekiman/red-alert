@@ -1,15 +1,9 @@
-declare global {
-  interface Window {
-    RED_ALERT_UI_CONFIG?: {
-      uiSocketPath?: string;
-    };
-  }
-}
+import { env } from "../env";
 
 const DEFAULT_UI_SOCKET_PATH = "/ui-socket";
 
 export function getUiSocketPath() {
-  const value = window.RED_ALERT_UI_CONFIG?.uiSocketPath;
+  const value = env.VITE_UI_SOCKET_PATH;
   if (typeof value === "string") {
     const trimmedValue = value.trim();
     if (

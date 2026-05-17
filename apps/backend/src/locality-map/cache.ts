@@ -1,82 +1,67 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import { parseVersion } from "./shared.js";
 
-export function readVersionsCache(cachePath: string, logger?: any) {
+export async function readVersionsCache(kv: KVNamespace, logger?: any) {
   try {
-    const content = readFileSync(cachePath, "utf8");
-    const parsed = JSON.parse(content);
+    const parsed = await kv.get("locality_map_versions", "json");
     if (!parsed || typeof parsed !== "object") {
       return null;
     }
     return {
-      cities: parseVersion(parsed.cities, null),
-      polygons: parseVersion(parsed.polygons, null)
+      cities: parseVersion((parsed as any).cities, null),
+      polygons: parseVersion((parsed as any).polygons, null)
     };
-  } catch (error) {
+  } catch (error: any) {
     logger?.debug?.("locality map versions cache unavailable", {
-      path: cachePath,
       error: error?.message
     });
     return null;
   }
 }
 
-export function writeVersionsCache(
-  cachePath: string,
+export async function writeVersionsCache(
+  kv: KVNamespace,
   versions: { cities: number | null; polygons: number | null },
   logger?: any
 ) {
   try {
-    mkdirSync(path.dirname(cachePath), { recursive: true });
-    writeFileSync(
-      cachePath,
-      JSON.stringify(
-        {
-          cities: versions.cities,
-          polygons: versions.polygons,
-          updatedAtIso: new Date().toISOString()
-        },
-        null,
-        2
-      ),
-      "utf8"
+    await kv.put(
+      "locality_map_versions",
+      JSON.stringify({
+        cities: versions.cities,
+        polygons: versions.polygons,
+        updatedAtIso: new Date().toISOString()
+      })
     );
-  } catch (error) {
+  } catch (error: any) {
     logger?.warn?.("failed writing locality map versions cache", {
-      path: cachePath,
       error: error?.message
     });
   }
 }
 
-export function readPayloadSnapshot(snapshotPath: string, logger?: any) {
+export async function readPayloadSnapshot(kv: KVNamespace, logger?: any) {
   try {
-    const content = readFileSync(snapshotPath, "utf8");
-    const parsed = JSON.parse(content);
+    const parsed = await kv.get("locality_map_snapshot", "json");
     if (!parsed || typeof parsed !== "object") {
       return null;
     }
-    if (!Array.isArray(parsed.localities) || !Array.isArray(parsed.areas)) {
+    if (!Array.isArray((parsed as any).localities) || !Array.isArray((parsed as any).areas)) {
       return null;
     }
     return parsed;
-  } catch (error) {
+  } catch (error: any) {
     logger?.debug?.("locality map payload snapshot unavailable", {
-      path: snapshotPath,
       error: error?.message
     });
     return null;
   }
 }
 
-export function writePayloadSnapshot(snapshotPath: string, payload: unknown, logger?: any) {
+export async function writePayloadSnapshot(kv: KVNamespace, payload: unknown, logger?: any) {
   try {
-    mkdirSync(path.dirname(snapshotPath), { recursive: true });
-    writeFileSync(snapshotPath, JSON.stringify(payload), "utf8");
-  } catch (error) {
+    await kv.put("locality_map_snapshot", JSON.stringify(payload));
+  } catch (error: any) {
     logger?.warn?.("failed writing locality map payload snapshot", {
-      path: snapshotPath,
       error: error?.message
     });
   }

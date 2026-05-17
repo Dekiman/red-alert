@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PolygonReplayEventPayload, PolygonReplayTimelinePayload } from "./contracts.js";
-import type { AlertMapControllerHandle } from "./alert-map-panel.js";
 import { formatTime } from "./text-utils.js";
 
 const STATE_WINDOW_MINUTES = 15;
@@ -70,7 +69,6 @@ interface ReplayStateItem {
 }
 
 interface TimelineReplayCardProps {
-  mapController: AlertMapControllerHandle | null;
   onReplayModeChanged: (active: boolean) => void;
   onReplayStateChanged?: (state: ReplayTimelineState) => void;
   onReplayTimelineEventsChanged?: (events: PolygonReplayEventPayload[]) => void;
@@ -162,7 +160,6 @@ function getRangeOptionByKey(rangeKey: ReplayRangeKey): ReplayRangeOption {
 }
 
 export function TimelineReplayCard({
-  mapController,
   onReplayModeChanged,
   onReplayStateChanged,
   onReplayTimelineEventsChanged
@@ -179,7 +176,9 @@ export function TimelineReplayCard({
   const previousStageByLocalityRef = useRef<Map<number, ReplayStateItem["stage"]>>(new Map());
 
   const selectedRange = useMemo(() => getRangeOptionByKey(selectedRangeKey), [selectedRangeKey]);
-  const timelineEvents = Array.isArray(timelinePayload?.events) ? timelinePayload.events : [];
+  const timelineEvents = useMemo(() => 
+    Array.isArray(timelinePayload?.events) ? timelinePayload.events : []
+  , [timelinePayload]);
   const timelineFromUnix = Number(timelinePayload?.rangeFromUnix ?? 0);
   const timelineToUnix = Number(timelinePayload?.rangeToUnix ?? 0);
   const effectiveReplayUnix =
@@ -230,7 +229,7 @@ export function TimelineReplayCard({
       } catch {
         if (rawText.trim().startsWith("<")) {
           throw new Error(
-            "Replay API returned HTML instead of JSON. Start/restart backend on 127.0.0.1:3030 or use Vite proxy."
+            "Replay API returned HTML instead of JSON. Start/restart backend on 127.0.0.1:8787 or use Vite proxy."
           );
         }
         throw new Error("Replay API returned invalid JSON payload.");
@@ -261,9 +260,8 @@ export function TimelineReplayCard({
       setIsPlaying(false);
       previousStageByLocalityRef.current.clear();
       setTransitionDelta(null);
-      mapController?.clearReplayTime();
     }
-  }, [isReplayActive, onReplayModeChanged, mapController]);
+  }, [isReplayActive, onReplayModeChanged]);
 
   useEffect(() => {
     onReplayStateChanged?.({
@@ -357,7 +355,7 @@ export function TimelineReplayCard({
   ]);
 
   useEffect(() => {
-    if (!isReplayActive || !mapController || !timelinePayload || effectiveReplayUnix == null) {
+    if (!isReplayActive || !timelinePayload || effectiveReplayUnix == null) {
       return;
     }
 
@@ -395,18 +393,17 @@ export function TimelineReplayCard({
     }
 
     previousStageByLocalityRef.current = nextStageByLocality;
-    setTransitionDelta({
-      toActiveSiren,
-      toPostSirenUnsafe,
-      cleared
+    setTransitionDelta((prev) => {
+      if (
+        prev?.toActiveSiren === toActiveSiren &&
+        prev?.toPostSirenUnsafe === toPostSirenUnsafe &&
+        prev?.cleared === cleared
+      ) {
+        return prev;
+      }
+      return { toActiveSiren, toPostSirenUnsafe, cleared };
     });
-
-    mapController.setReplayTimeUnix(effectiveReplayUnix);
-    mapController.resetState();
-    if (replayStates.length > 0) {
-      mapController.applyInferredStates(replayStates);
-    }
-  }, [isReplayActive, mapController, timelinePayload, timelineEvents, effectiveReplayUnix]);
+  }, [isReplayActive, timelinePayload, timelineEvents, effectiveReplayUnix]);
 
   const hasTimeline = Number.isFinite(timelineFromUnix) && Number.isFinite(timelineToUnix) && timelineToUnix >= timelineFromUnix;
   const replayProgressValue =

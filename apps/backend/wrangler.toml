@@ -3,5 +3,22 @@ main = "src/index.ts"
 compatibility_date = "2025-05-01"
 compatibility_flags = ["nodejs_compat"]
 
-# [triggers]
-# crons = ["* * * * *"]  # every minute
+[[kv_namespaces]]
+binding = "ALERTS_KV"
+id = "alerts_kv_mock_id"
+
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "cache_kv_mock_id"
+
+[triggers]
+crons = ["* * * * *"]  # every minute
+
+[durable_objects]
+bindings = [
+  { name = "ALERT_BROADCASTER", class_name = "AlertBroadcaster" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["AlertBroadcaster"]

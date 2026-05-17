@@ -1,4 +1,3 @@
-import path from "node:path";
 import { readPayloadSnapshot, readVersionsCache, writePayloadSnapshot, writeVersionsCache } from "./cache.js";
 import { buildCatalogLookupFromPayload, buildCatalogPayload, findMatchingLocalityIds } from "./catalog-builder.js";
 import { fetchJsonWithTimeout } from "./fetch-json.js";
@@ -6,6 +5,7 @@ import { extractCitiesPayload, extractPolygonsPayload, extractVersionPayload } f
 import { buildVersionedUrl, parseVersion, uniqueSortedNumbers } from "./shared.js";
 
 type LocalityMapCatalogOptions = {
+  kv: KVNamespace;
   enabled?: boolean;
   listsVersionsUrl?: string;
   citiesBaseUrl?: string;
@@ -13,12 +13,11 @@ type LocalityMapCatalogOptions = {
   fetchTimeoutMs?: number;
   defaultCitiesVersion?: number;
   defaultPolygonsVersion?: number;
-  versionsCachePath?: string;
-  snapshotPath?: string;
   logger?: any;
 };
 
-export function createLocalityMapCatalog({
+export async function createLocalityMapCatalog({
+  kv,
   enabled = true,
   listsVersionsUrl = "https://api.tzevaadom.co.il/lists-versions",
   citiesBaseUrl = "https://www.tzevaadom.co.il/static/cities.json",
@@ -26,43 +25,38 @@ export function createLocalityMapCatalog({
   fetchTimeoutMs = 15000,
   defaultCitiesVersion = 10,
   defaultPolygonsVersion = 5,
-  versionsCachePath = process.env.RED_ALERT_LOCALITY_MAP_VERSIONS_CACHE_PATH ??
-    path.join(process.cwd(), "data", "locality-map-versions.json"),
-  snapshotPath = process.env.RED_ALERT_LOCALITY_MAP_SNAPSHOT_PATH ??
-    path.join(process.cwd(), "data", "locality-map-snapshot.json"),
   logger
-}: LocalityMapCatalogOptions = {}) {
-  const cachedVersions = readVersionsCache(versionsCachePath, logger);
-  const snapshotPayloadCandidate = readPayloadSnapshot(snapshotPath, logger);
+}: LocalityMapCatalogOptions) {
+  const cachedVersions = await readVersionsCache(kv, logger);
+  const snapshotPayloadCandidate = await readPayloadSnapshot(kv, logger);
   const snapshotPayload =
-    snapshotPayloadCandidate && Array.isArray(snapshotPayloadCandidate.localities) && snapshotPayloadCandidate.localities.length > 0
+    snapshotPayloadCandidate && Array.isArray((snapshotPayloadCandidate as any).localities) && (snapshotPayloadCandidate as any).localities.length > 0
       ? snapshotPayloadCandidate
       : null;
   const snapshotLookup = snapshotPayload ? buildCatalogLookupFromPayload(snapshotPayload) : null;
   const snapshotVersions = {
-    cities: parseVersion(snapshotPayload?.source?.citiesVersion, null),
-    polygons: parseVersion(snapshotPayload?.source?.polygonsVersion, null)
+    cities: parseVersion((snapshotPayload as any)?.source?.citiesVersion, null),
+    polygons: parseVersion((snapshotPayload as any)?.source?.polygonsVersion, null)
   };
   const state = {
     status: enabled ? (snapshotPayload ? "ready" : "idle") : "disabled",
-    payload: snapshotPayload,
+    payload: snapshotPayload as any,
     lookup: snapshotLookup,
-    lastError: null,
-    loadedAtIso: snapshotPayload?.loadedAtIso ?? null,
+    lastError: null as string | null,
+    loadedAtIso: (snapshotPayload as any)?.loadedAtIso ?? null,
     lastKnownVersions: {
       cities: parseVersion(cachedVersions?.cities, snapshotVersions.cities),
       polygons: parseVersion(cachedVersions?.polygons, snapshotVersions.polygons)
     }
   };
 
-  let refreshPromise;
+  let refreshPromise: Promise<any> | undefined;
 
   if (enabled && snapshotPayload) {
     logger?.info?.("locality map catalog hydrated from snapshot", {
-      path: snapshotPath,
-      localities: snapshotPayload.localities.length,
-      areas: Array.isArray(snapshotPayload.areas) ? snapshotPayload.areas.length : 0,
-      loadedAtIso: snapshotPayload.loadedAtIso ?? null
+      localities: (snapshotPayload as any).localities.length,
+      areas: Array.isArray((snapshotPayload as any).areas) ? (snapshotPayload as any).areas.length : 0,
+      loadedAtIso: (snapshotPayload as any).loadedAtIso ?? null
     });
   }
 
@@ -80,7 +74,7 @@ export function createLocalityMapCatalog({
     return state.payload;
   }
 
-  function findLocalityIdsForLocations(locationNames = []) {
+  function findLocalityIdsForLocations(locationNames: string[] = []) {
     if (!enabled || !state.lookup || !Array.isArray(locationNames) || locationNames.length === 0) {
       return [];
     }
@@ -112,7 +106,7 @@ export function createLocalityMapCatalog({
       let versions: any = {};
       try {
         versions = extractVersionPayload(await fetchJsonWithTimeout(listsVersionsUrl, fetchTimeoutMs));
-      } catch (error) {
+      } catch (error: any) {
         logger?.warn?.("failed to fetch locality map versions; using fallback versions", {
           reason,
           error: error?.message,
@@ -172,8 +166,8 @@ export function createLocalityMapCatalog({
           cities: citiesVersion,
           polygons: polygonsVersion
         };
-        writeVersionsCache(versionsCachePath, state.lastKnownVersions, logger);
-        writePayloadSnapshot(snapshotPath, built.payload, logger);
+        await writeVersionsCache(kv, state.lastKnownVersions, logger);
+        await writePayloadSnapshot(kv, built.payload, logger);
         logger?.info?.("locality map catalog loaded", {
           reason,
           localities: built.payload.localities.length,
@@ -182,7 +176,7 @@ export function createLocalityMapCatalog({
           polygonsVersion,
           versionsSource
         });
-      } catch (error) {
+      } catch (error: any) {
         state.status = state.payload ? "stale" : "error";
         state.lastError = error?.message ?? "unknown error";
         logger?.error?.("failed to refresh locality map catalog", {

@@ -1,5 +1,5 @@
 import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertMapPanel, type AlertMapControllerHandle } from "./alert-map-panel.js";
+import { AlertMapPanel } from "./alert-map-panel.js";
 import type {
   AlertPayload,
   LiveNewsEventTypeCountPayload,
@@ -13,6 +13,7 @@ import { categorizeNewsTitleType } from "./news-categorizer.js";
 import { formatNewsTime, formatTime, hasHebrew } from "./text-utils.js";
 import { getUiSocketPath } from "./ui-config.js";
 import { useDashboardSocket } from "./use-dashboard-socket.js";
+import { useDashboardStore } from "../stores/useDashboardStore.js";
 import { LiveClockValue } from "./live-clock-value.js";
 import { TimelineReplayCard, type ReplayTimelineState } from "./timeline-replay-card.js";
 
@@ -494,10 +495,18 @@ function toReplayAlertPayload(event: PolygonReplayEventPayload): AlertPayload | 
 }
 
 export function App() {
-  const mapControllerRef = useRef<AlertMapControllerHandle | null>(null);
   const previousReplayActiveRef = useRef(false);
   const newsFilterMenuRef = useRef<HTMLDivElement | null>(null);
-  const [mapController, setMapController] = useState<AlertMapControllerHandle | null>(null);
+
+  const storeAlerts = useDashboardStore((s) => s.alerts);
+  const storeNewsEvents = useDashboardStore((s) => s.newsEvents);
+  const connectionState = useDashboardStore((s) => s.connectionState);
+  const connectionText = useDashboardStore((s) => s.connectionText);
+  const updatedAt = useDashboardStore((s) => s.updatedAt);
+  const uiClients = useDashboardStore((s) => s.uiClients);
+  const bufferedAlerts = useDashboardStore((s) => s.bufferedAlerts);
+  const bufferedNewsEvents = useDashboardStore((s) => s.bufferedNewsEvents);
+
   const [isTimelineReplayActive, setIsTimelineReplayActive] = useState(false);
   const [replayTimelineState, setReplayTimelineState] = useState<ReplayTimelineState>(DEFAULT_REPLAY_TIMELINE_STATE);
   const [isWatchfloorCollapsed, setIsWatchfloorCollapsed] = useState(false);
@@ -511,10 +520,11 @@ export function App() {
   const [replayNewsEvents, setReplayNewsEvents] = useState<NewsEventPayload[]>([]);
   const [replayAlertEvents, setReplayAlertEvents] = useState<PolygonReplayEventPayload[]>([]);
   const socketPath = getUiSocketPath();
-  const dashboard = useDashboardSocket(socketPath, mapControllerRef, {
-    pauseMapUpdates: isTimelineReplayActive,
-    mapController
+
+  useDashboardSocket(socketPath, {
+    pauseMapUpdates: isTimelineReplayActive
   });
+
   const selectedNewsTypesKey = selectedNewsTypes.join("|");
   const selectedNewsSeveritiesKey = selectedNewsSeverities.join("|");
   const replayRangeFromUnix =
@@ -536,11 +546,19 @@ export function App() {
   const isReplaySessionActive = isTimelineReplayActive && replayTimelineState.active;
   const isReplayFeedMode = isReplaySessionActive && replayRangeFromUnix != null && replayRangeToUnix != null;
   const liveNewsEvents = useMemo(
-    () => mergeNewsEventLists(historicalNewsEvents, dashboard.newsEvents),
-    [historicalNewsEvents, dashboard.newsEvents]
+    () => {
+      const merged = mergeNewsEventLists(historicalNewsEvents, storeNewsEvents);
+      console.log(`[App] Merged news events: ${merged.length} (historical: ${historicalNewsEvents.length}, store: ${storeNewsEvents.length})`);
+      return merged;
+    },
+    [historicalNewsEvents, storeNewsEvents]
   );
   const liveWindowNewsEvents = useMemo(
-    () => filterNewsEventsByMaxAge(liveNewsEvents, liveNewsReferenceNowMs, GLOBE_NEWS_MAX_AGE_MS),
+    () => {
+      const filtered = filterNewsEventsByMaxAge(liveNewsEvents, liveNewsReferenceNowMs, GLOBE_NEWS_MAX_AGE_MS);
+      console.log(`[App] News events in 7d window: ${filtered.length}`);
+      return filtered;
+    },
     [liveNewsEvents, liveNewsReferenceNowMs]
   );
   const replayWindowNewsEvents = useMemo(
@@ -589,7 +607,7 @@ export function App() {
 
     return alerts;
   }, [replayAlertEvents, replayCursorUnix, replayAlertWindowMinutes]);
-  const visibleAlerts = isReplaySessionActive ? replayVisibleAlerts : dashboard.alerts;
+  const visibleAlerts = isReplaySessionActive ? replayVisibleAlerts : storeAlerts;
   // Keep the feed, filter counts, and globe markers on the same time window.
   const sourceNewsEventsForFilters = isReplaySessionActive
     ? isReplayFeedMode
@@ -605,7 +623,7 @@ export function App() {
       ),
     [selectedNewsSeverities, selectedNewsTypes, sourceNewsEventsForFilters]
   );
-  const filteredNewsEvents = matchingNewsEvents.slice(0, 100);
+  const filteredNewsEvents = useMemo(() => matchingNewsEvents.slice(0, 100), [matchingNewsEvents]);
   const globeNewsEvents = filteredNewsEvents;
   const newsFilterOptions = useMemo(
     () => buildLocalNewsTypeCounts(sourceNewsEventsForFilters, selectedNewsTypes, selectedNewsSeverities),
@@ -644,7 +662,7 @@ export function App() {
     ? formatNewsTime(latestNewsEvent.updatedAtIso || latestNewsEvent.createdAtIso)
     : replayCursorUnix != null
       ? formatNewsTime(new Date(replayCursorUnix * 1000).toISOString())
-      : dashboard.updatedAt;
+      : updatedAt;
   const newsTypeSummary = isShowingAllNewsTypes
     ? "All types"
     : effectiveSelectedNewsTypes.length === 1
@@ -849,36 +867,8 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!mapController) {
-      return;
-    }
-    if (isTimelineReplayActive) {
-      return;
-    }
-    for (let i = dashboard.alerts.length - 1; i >= 0; i -= 1) {
-      mapController.activateFromAlert(dashboard.alerts[i]);
-    }
-  }, [mapController, isTimelineReplayActive, dashboard.alerts]);
-
-  useEffect(() => {
-    const wasReplayActive = previousReplayActiveRef.current;
     previousReplayActiveRef.current = isTimelineReplayActive;
-
-    if (!mapController || !wasReplayActive || isTimelineReplayActive) {
-      return;
-    }
-
-    mapController.clearReplayTime();
-    mapController.resetState();
-    for (let i = dashboard.alerts.length - 1; i >= 0; i -= 1) {
-      mapController.activateFromAlert(dashboard.alerts[i]);
-    }
-  }, [isTimelineReplayActive, mapController, dashboard.alerts]);
-
-  const handleControllerReady = useCallback((controller: AlertMapControllerHandle | null) => {
-    mapControllerRef.current = controller;
-    setMapController(controller);
-  }, []);
+  }, [isTimelineReplayActive]);
 
   const handleReplayStateChanged = useCallback((nextState: ReplayTimelineState) => {
     startTransition(() => {
@@ -888,7 +878,7 @@ export function App() {
 
   return (
     <main className={`app-shell${isNewsFeedCollapsed ? " news-feed-collapsed" : ""}`}>
-      <AlertMapPanel onControllerReady={handleControllerReady} newsEvents={globeNewsEvents} />
+      <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} />
 
       <div className="interface-overlay">
         <section
@@ -906,8 +896,8 @@ export function App() {
                   </strong>
                 </span>
                 <span className="topbar-stripe-status">
-                  <StatusDot mode={dashboard.connectionState} />
-                  <span>{dashboard.connectionText}</span>
+                  <StatusDot mode={connectionState} />
+                  <span>{connectionText}</span>
                 </span>
                 <button
                   type="button"
@@ -924,15 +914,15 @@ export function App() {
               <div className="topbar-main">
                 <div className="topbar-copy">
                   <p className="topbar-eyebrow">Realtime watchfloor</p>
-                  <h1 className="title">Red Alert + Live News</h1>
+                  <h1 className="title">Red Alert UPDATED + Live News</h1>
                   <p className="subtitle">Realtime Israeli alert state and worldwide incident flow on a live 3D globe.</p>
                 </div>
 
                 <div className="topbar-side">
                   <div className="topbar-side-head">
                     <div className="status">
-                      <StatusDot mode={dashboard.connectionState} />
-                      <span>{dashboard.connectionText}</span>
+                      <StatusDot mode={connectionState} />
+                      <span>{connectionText}</span>
                     </div>
                     <button
                       type="button"
@@ -945,7 +935,7 @@ export function App() {
                   </div>
                   <div className="time-stack">
                     <Metric label="Time" value={<LiveClockValue />} />
-                    <Metric label="Updated" value={dashboard.updatedAt} />
+                    <Metric label="Updated" value={updatedAt} />
                   </div>
                 </div>
               </div>
@@ -953,9 +943,9 @@ export function App() {
               <div className="metrics">
                 <Metric label="Alerts Visible" value={visibleAlerts.length} />
                 <Metric label="News Visible" value={filteredNewsEvents.length} />
-                <Metric label="Buffered Alerts" value={dashboard.bufferedAlerts} />
-                <Metric label="Buffered News" value={dashboard.bufferedNewsEvents} />
-                <Metric label="UI Clients" value={dashboard.uiClients} />
+                <Metric label="Buffered Alerts" value={bufferedAlerts} />
+                <Metric label="Buffered News" value={bufferedNewsEvents} />
+                <Metric label="UI Clients" value={uiClients} />
               </div>
 
               <div className="headline-strip">
@@ -1101,7 +1091,6 @@ export function App() {
 
         <section className="overlay-dock" aria-label="Replay and red alert overlays">
           <TimelineReplayCard
-            mapController={mapController}
             onReplayModeChanged={setIsTimelineReplayActive}
             onReplayStateChanged={handleReplayStateChanged}
             onReplayTimelineEventsChanged={setReplayAlertEvents}

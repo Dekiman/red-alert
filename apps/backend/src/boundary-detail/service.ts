@@ -1,10 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-
 const GEObOUNDARIES_METADATA_URL = "https://www.geoboundaries.org/api/current/gbOpen/ALL/ALL/";
 const SUPPORTED_LEVELS = new Set(["ADM1", "ADM2"]);
-const DEFAULT_BOUNDARY_DETAIL_CACHE_DIR =
-  process.env.RED_ALERT_BOUNDARY_DETAIL_CACHE_DIR ?? path.join(process.cwd(), "data", "boundary-detail-cache");
 
 const COUNTRY_NAME_ALIASES: Record<string, string[]> = {
   "antigua and barb": ["antigua and barbuda"],
@@ -168,18 +163,17 @@ function slugifyBoundarySnapshotValue(value: string) {
   return normalized || "unknown";
 }
 
-function buildBoundarySnapshotPath(cacheDir: string, countryName: string, level: string) {
+function buildBoundarySnapshotKey(countryName: string, level: string) {
   const normalizedLevel = String(level ?? "")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "");
-  return path.join(cacheDir, `${normalizedLevel || "UNKNOWN"}__${slugifyBoundarySnapshotValue(countryName)}.json`);
+  return `boundary_${normalizedLevel || "UNKNOWN"}__${slugifyBoundarySnapshotValue(countryName)}`;
 }
 
-function readBoundarySnapshot(snapshotPath: string, logger?: any) {
+async function readBoundarySnapshot(kv: KVNamespace, snapshotKey: string, logger?: any) {
   try {
-    const content = readFileSync(snapshotPath, "utf8");
-    const parsed = JSON.parse(content);
-    if (!parsed || typeof parsed !== "object" || !parsed.featureCollection || typeof parsed.featureCollection !== "object") {
+    const parsed = await kv.get(snapshotKey, "json");
+    if (!parsed || typeof parsed !== "object" || !(parsed as any).featureCollection || typeof (parsed as any).featureCollection !== "object") {
       return null;
     }
 
@@ -187,22 +181,21 @@ function readBoundarySnapshot(snapshotPath: string, logger?: any) {
       ...parsed,
       source: "geoBoundaries_snapshot"
     };
-  } catch (error) {
+  } catch (error: any) {
     logger?.debug?.("boundary detail snapshot unavailable", {
-      path: snapshotPath,
+      key: snapshotKey,
       error: error?.message
     });
     return null;
   }
 }
 
-function writeBoundarySnapshot(snapshotPath: string, payload: unknown, logger?: any) {
+async function writeBoundarySnapshot(kv: KVNamespace, snapshotKey: string, payload: unknown, logger?: any) {
   try {
-    mkdirSync(path.dirname(snapshotPath), { recursive: true });
-    writeFileSync(snapshotPath, JSON.stringify(payload), "utf8");
-  } catch (error) {
+    await kv.put(snapshotKey, JSON.stringify(payload));
+  } catch (error: any) {
     logger?.warn?.("failed writing boundary detail snapshot", {
-      path: snapshotPath,
+      key: snapshotKey,
       error: error?.message
     });
   }
@@ -221,7 +214,7 @@ type BoundaryDetailQuery = {
   level: string;
 };
 
-export function createBoundaryDetailService({ logger }: { logger?: any }) {
+export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; logger?: any }) {
   let metadataPromise: Promise<GeoBoundariesMetadata[]> | null = null;
   const detailCache = new Map<string, Promise<any | null>>();
 
@@ -278,32 +271,30 @@ export function createBoundaryDetailService({ logger }: { logger?: any }) {
       return null;
     }
 
-    const requestSnapshotPath = buildBoundarySnapshotPath(
-      DEFAULT_BOUNDARY_DETAIL_CACHE_DIR,
+    const requestSnapshotKey = buildBoundarySnapshotKey(
       requestedCountryName,
       normalizedLevel
     );
     let metadata = null;
     try {
       metadata = await resolveMetadata(requestedCountryName, normalizedLevel);
-    } catch (error) {
+    } catch (error: any) {
       logger?.warn?.("boundary metadata fetch failed; using snapshot fallback if available", {
         countryName: requestedCountryName,
         level: normalizedLevel,
         error: error?.message
       });
-      const snapshotPayload = readBoundarySnapshot(requestSnapshotPath, logger);
+      const snapshotPayload = await readBoundarySnapshot(kv, requestSnapshotKey, logger);
       return snapshotPayload ? cloneJson(snapshotPayload) : null;
     }
 
     if (!metadata) {
-      const snapshotPayload = readBoundarySnapshot(requestSnapshotPath, logger);
+      const snapshotPayload = await readBoundarySnapshot(kv, requestSnapshotKey, logger);
       return snapshotPayload ? cloneJson(snapshotPayload) : null;
     }
 
     const cacheKey = `${metadata.boundaryISO}:${normalizedLevel}`;
-    const matchedSnapshotPath = buildBoundarySnapshotPath(
-      DEFAULT_BOUNDARY_DETAIL_CACHE_DIR,
+    const matchedSnapshotKey = buildBoundarySnapshotKey(
       metadata.boundaryName,
       normalizedLevel
     );
@@ -329,13 +320,13 @@ export function createBoundaryDetailService({ logger }: { logger?: any }) {
               level: normalizedLevel,
               featureCollection: geojson
             };
-            writeBoundarySnapshot(requestSnapshotPath, payload, logger);
-            if (matchedSnapshotPath !== requestSnapshotPath) {
-              writeBoundarySnapshot(matchedSnapshotPath, payload, logger);
+            await writeBoundarySnapshot(kv, requestSnapshotKey, payload, logger);
+            if (matchedSnapshotKey !== requestSnapshotKey) {
+              await writeBoundarySnapshot(kv, matchedSnapshotKey, payload, logger);
             }
             return payload;
           })
-          .catch((error) => {
+          .catch(async (error) => {
             detailCache.delete(cacheKey);
             logger?.warn?.("boundary detail fetch failed", {
               countryName: requestedCountryName,
@@ -343,16 +334,17 @@ export function createBoundaryDetailService({ logger }: { logger?: any }) {
               level: normalizedLevel,
               error: error?.message
             });
-            return readBoundarySnapshot(requestSnapshotPath, logger) ?? readBoundarySnapshot(matchedSnapshotPath, logger);
+            const fallback = await readBoundarySnapshot(kv, requestSnapshotKey, logger) ?? await readBoundarySnapshot(kv, matchedSnapshotKey, logger);
+            return fallback;
           })
       );
     }
 
     const payload = await detailCache.get(cacheKey)!;
     if (payload && payload.source !== "geoBoundaries_snapshot") {
-      writeBoundarySnapshot(requestSnapshotPath, payload, logger);
-      if (matchedSnapshotPath !== requestSnapshotPath) {
-        writeBoundarySnapshot(matchedSnapshotPath, payload, logger);
+      await writeBoundarySnapshot(kv, requestSnapshotKey, payload, logger);
+      if (matchedSnapshotKey !== requestSnapshotKey) {
+        await writeBoundarySnapshot(kv, matchedSnapshotKey, payload, logger);
       }
     }
     return payload ? cloneJson(payload) : null;

@@ -1,32 +1,5 @@
 import type { NormalizedNewsEvent, NormalizedNewsSignal } from "./types.js";
-
-export function firstDefined(...values: unknown[]) {
-  for (const value of values) {
-    if (value !== undefined && value !== null) {
-      return value;
-    }
-  }
-  return null;
-}
-
-export function parseBooleanLike(value: unknown, fallback = false) {
-  if (value == null) {
-    return fallback;
-  }
-
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  const normalized = String(value).trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) {
-    return true;
-  }
-  if (["false", "0", "no", "n"].includes(normalized)) {
-    return false;
-  }
-  return fallback;
-}
+import { firstDefined, parseBooleanLike } from "../../utils/primitives.js";
 
 export function normalizeTimestamp(input: unknown) {
   if (input == null) {

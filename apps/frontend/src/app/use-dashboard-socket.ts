@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 import type {
   AlertPayload,
@@ -8,31 +8,17 @@ import type {
   SystemMessagePayload,
   UiSocketPayload
 } from "./contracts.js";
-import type { AlertMapControllerHandle } from "./alert-map-panel.js";
 import { sanitizeNewsEventLocationFields } from "./news-event-location.js";
+import { dashboardStore } from "../stores/useDashboardStore.js";
 
-const MAX_VISIBLE_ALERTS = 150;
-const MAX_VISIBLE_NEWS = 150;
 const MAX_BUFFERED_SYSTEM_MESSAGES = 32;
 const SOCKET_RECONNECT_MS = 1500;
 const INITIAL_POLYGON_STATES_API_URL = "/api/polygon-states/current?windowMinutes=15";
 
 export type ConnectionState = "live" | "down" | "connecting";
 
-interface DashboardSocketState {
-  connectionState: ConnectionState;
-  connectionText: string;
-  updatedAt: string;
-  alerts: AlertPayload[];
-  newsEvents: NewsEventPayload[];
-  uiClients: number;
-  bufferedAlerts: number;
-  bufferedNewsEvents: number;
-}
-
 interface DashboardSocketOptions {
   pauseMapUpdates?: boolean;
-  mapController?: AlertMapControllerHandle | null;
 }
 
 function resolveSocketUrl(socketPath: string) {
@@ -166,14 +152,6 @@ function toSystemMessagePayload(input: unknown): SystemMessagePayload | null {
   };
 }
 
-function limitAlerts(list: AlertPayload[]) {
-  return list.slice(0, MAX_VISIBLE_ALERTS);
-}
-
-function limitNews(list: NewsEventPayload[]) {
-  return list.slice(0, MAX_VISIBLE_NEWS);
-}
-
 function toInferredPolygonStates(input: unknown): InferredPolygonStatePayload[] {
   if (!input || typeof input !== "object") {
     return [];
@@ -189,50 +167,18 @@ function toInferredPolygonStates(input: unknown): InferredPolygonStatePayload[] 
 
 export function useDashboardSocket(
   socketPath: string,
-  mapControllerRef: MutableRefObject<AlertMapControllerHandle | null>,
   options: DashboardSocketOptions = {}
-): DashboardSocketState {
-  const { pauseMapUpdates = false, mapController = null } = options;
-  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
-  const [connectionText, setConnectionText] = useState("Connecting...");
-  const [updatedAt, setUpdatedAt] = useState("-");
-  const [alerts, setAlerts] = useState<AlertPayload[]>([]);
-  const [newsEvents, setNewsEvents] = useState<NewsEventPayload[]>([]);
-  const [uiClients, setUiClients] = useState(0);
-  const [bufferedAlerts, setBufferedAlerts] = useState(0);
-  const [bufferedNewsEvents, setBufferedNewsEvents] = useState(0);
+) {
+  const { pauseMapUpdates = false } = options;
+  const { setAlerts, addAlert, setNewsEvents, addNewsEvent, setConnectionState, setStats, setUpdatedAt } = dashboardStore.getState();
+
   const reconnectTimerRef = useRef<number | null>(null);
   const hasReceivedSnapshotRef = useRef(false);
-  const hasHydratedPolygonStatesRef = useRef(false);
-  const inferredPolygonStatesRef = useRef<InferredPolygonStatePayload[] | null>(null);
   const pauseMapUpdatesRef = useRef(Boolean(pauseMapUpdates));
-  const currentMapControllerRef = useRef<AlertMapControllerHandle | null>(mapController ?? mapControllerRef.current);
-  const queuedSystemMessagesRef = useRef<SystemMessagePayload[]>([]);
 
   useEffect(() => {
     pauseMapUpdatesRef.current = Boolean(pauseMapUpdates);
   }, [pauseMapUpdates]);
-
-  useEffect(() => {
-    currentMapControllerRef.current = mapController ?? mapControllerRef.current;
-  }, [mapController, mapControllerRef]);
-
-  useEffect(() => {
-    const currentMapController = currentMapControllerRef.current ?? mapControllerRef.current;
-    if (
-      !currentMapController ||
-      pauseMapUpdatesRef.current ||
-      queuedSystemMessagesRef.current.length === 0 ||
-      !hasReceivedSnapshotRef.current
-    ) {
-      return;
-    }
-
-    const queuedMessages = queuedSystemMessagesRef.current.splice(0, queuedSystemMessagesRef.current.length);
-    for (const systemMessage of queuedMessages) {
-      currentMapController.handleSystemMessage(systemMessage);
-    }
-  }, [mapController, pauseMapUpdates, mapControllerRef]);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -249,52 +195,6 @@ export function useDashboardSocket(
       setUpdatedAt(nextUpdatedAtValue());
     };
 
-    const queueSystemMessage = (systemMessage: SystemMessagePayload) => {
-      queuedSystemMessagesRef.current.push(systemMessage);
-      if (queuedSystemMessagesRef.current.length > MAX_BUFFERED_SYSTEM_MESSAGES) {
-        queuedSystemMessagesRef.current.splice(
-          0,
-          queuedSystemMessagesRef.current.length - MAX_BUFFERED_SYSTEM_MESSAGES
-        );
-      }
-    };
-
-    const flushQueuedSystemMessages = (mapController: AlertMapControllerHandle | null) => {
-      if (!mapController || pauseMapUpdatesRef.current || queuedSystemMessagesRef.current.length === 0) {
-        return;
-      }
-
-      const queuedMessages = queuedSystemMessagesRef.current.splice(0, queuedSystemMessagesRef.current.length);
-      for (const systemMessage of queuedMessages) {
-        mapController.handleSystemMessage(systemMessage);
-      }
-    };
-
-    const hydrateInitialPolygonStates = async (mapController: AlertMapControllerHandle | null) => {
-      if (!mapController || hasHydratedPolygonStatesRef.current) {
-        return;
-      }
-      hasHydratedPolygonStatesRef.current = true;
-
-      try {
-        const response = await fetch(INITIAL_POLYGON_STATES_API_URL, {
-          cache: "no-store"
-        });
-        if (!response.ok) {
-          return;
-        }
-
-        const parsed = await response.json();
-        const inferredStates = toInferredPolygonStates(parsed);
-        inferredPolygonStatesRef.current = inferredStates;
-        if (inferredStates.length > 0 && !pauseMapUpdatesRef.current) {
-          mapController.applyInferredStates(inferredStates);
-        }
-      } catch {
-        // Ignore polygon state hydration failures; live stream updates still apply.
-      }
-    };
-
     const connect = () => {
       if (isDisposed) {
         return;
@@ -302,32 +202,26 @@ export function useDashboardSocket(
 
       hasReceivedSnapshotRef.current = false;
       setConnectionState("connecting");
-      setConnectionText("Connecting...");
 
       const socketUrl = resolveSocketUrl(socketPath);
       socket = new WebSocket(socketUrl);
 
       socket.addEventListener("open", () => {
         setConnectionState("live");
-        setConnectionText("Connected");
         markUpdated();
-        const currentMapController = currentMapControllerRef.current ?? mapControllerRef.current;
-        void hydrateInitialPolygonStates(currentMapController);
       });
 
       socket.addEventListener("close", () => {
         if (isDisposed) {
           return;
         }
-        setConnectionState("down");
-        setConnectionText("Disconnected, retrying...");
+        setConnectionState("down", "Disconnected, retrying...");
         clearReconnectTimer();
         reconnectTimerRef.current = window.setTimeout(connect, SOCKET_RECONNECT_MS);
       });
 
       socket.addEventListener("error", () => {
-        setConnectionState("down");
-        setConnectionText("Socket error");
+        setConnectionState("down", "Socket error");
       });
 
       socket.addEventListener("message", (event) => {
@@ -347,33 +241,14 @@ export function useDashboardSocket(
 
         if (payload.type === "snapshot") {
           hasReceivedSnapshotRef.current = true;
-          const alertList = limitAlerts(
-            (Array.isArray(payload.alerts) ? payload.alerts : [])
+          const alertList = (Array.isArray(payload.alerts) ? payload.alerts : [])
               .map((alertItem) => toAlertPayload(alertItem))
-              .filter((alertItem): alertItem is AlertPayload => alertItem != null)
-          );
-          const newsList = limitNews(
-            (Array.isArray(payload.newsEvents) ? payload.newsEvents : [])
+              .filter((alertItem): alertItem is AlertPayload => alertItem != null);
+          const newsList = (Array.isArray(payload.newsEvents) ? payload.newsEvents : [])
               .map((newsItem) => toNewsEventPayload(newsItem))
-              .filter((newsItem): newsItem is NewsEventPayload => newsItem != null)
-          );
+              .filter((newsItem): newsItem is NewsEventPayload => newsItem != null);
           setAlerts(alertList);
           setNewsEvents(newsList);
-
-          const mapController = currentMapControllerRef.current ?? mapControllerRef.current;
-          if (mapController && !pauseMapUpdatesRef.current) {
-            mapController.resetState();
-            for (let i = alertList.length - 1; i >= 0; i -= 1) {
-              mapController.activateFromAlert(alertList[i]);
-            }
-
-            if (Array.isArray(inferredPolygonStatesRef.current) && inferredPolygonStatesRef.current.length > 0) {
-              mapController.applyInferredStates(inferredPolygonStatesRef.current);
-            } else {
-              void hydrateInitialPolygonStates(mapController);
-            }
-            flushQueuedSystemMessages(mapController);
-          }
           return;
         }
 
@@ -383,45 +258,33 @@ export function useDashboardSocket(
             return;
           }
 
-          setAlerts((current) => limitAlerts([normalizedAlert, ...current]));
-          if (!pauseMapUpdatesRef.current) {
-            mapControllerRef.current?.activateFromAlert(normalizedAlert);
-          }
+          addAlert(normalizedAlert);
           return;
         }
 
         if (payload.type === "news_event" && payload.newsEvent) {
+          console.log("[Socket] Received news event:", payload.newsEvent.eventId);
           const normalizedNewsEvent = toNewsEventPayload(payload.newsEvent);
           if (!normalizedNewsEvent) {
+            console.warn("[Socket] Failed to normalize news event:", payload.newsEvent.eventId);
             return;
           }
 
-          setNewsEvents((current) => {
-            const deduped = current.filter((eventItem) => eventItem.eventId !== normalizedNewsEvent.eventId);
-            return limitNews([normalizedNewsEvent, ...deduped]);
-          });
+          addNewsEvent(normalizedNewsEvent);
           return;
         }
 
         if (payload.type === "system_message") {
-          const normalizedSystemMessage = toSystemMessagePayload(payload.systemMessage);
-          if (!normalizedSystemMessage) {
-            return;
-          }
-
-          const mapController = currentMapControllerRef.current ?? mapControllerRef.current;
-          if (!mapController || pauseMapUpdatesRef.current) {
-            queueSystemMessage(normalizedSystemMessage);
-            return;
-          }
-          mapController.handleSystemMessage(normalizedSystemMessage);
+          // No-op for now in pure R3F build unless we add a UI toast system
           return;
         }
 
         if (payload.type === "stats") {
-          setUiClients(payload.connectedClients ?? 0);
-          setBufferedAlerts(payload.bufferedAlerts ?? 0);
-          setBufferedNewsEvents(payload.bufferedNewsEvents ?? 0);
+          setStats({
+            uiClients: payload.connectedClients ?? 0,
+            bufferedAlerts: payload.bufferedAlerts ?? 0,
+            bufferedNewsEvents: payload.bufferedNewsEvents ?? 0
+          });
         }
       });
     };
@@ -436,16 +299,5 @@ export function useDashboardSocket(
       }
       socket = null;
     };
-  }, [socketPath, mapControllerRef]);
-
-  return {
-    connectionState,
-    connectionText,
-    updatedAt,
-    alerts,
-    newsEvents,
-    uiClients,
-    bufferedAlerts,
-    bufferedNewsEvents
-  };
+  }, [socketPath, setAlerts, addAlert, setNewsEvents, addNewsEvent, setConnectionState, setStats, setUpdatedAt]);
 }

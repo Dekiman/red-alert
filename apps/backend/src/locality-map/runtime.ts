@@ -21,13 +21,14 @@ export function createLocalityMapRuntime(options) {
     }
   }
 
-  function start() {
+  async function start(kv: KVNamespace) {
     if (!config.localityMapEnabled) {
       logger.info("locality map catalog disabled");
       return;
     }
 
-    localityMapCatalog = createLocalityMapCatalog({
+    localityMapCatalog = await createLocalityMapCatalog({
+      kv,
       enabled: config.localityMapEnabled,
       listsVersionsUrl: config.localityMapListsVersionsUrl,
       citiesBaseUrl: config.localityMapCitiesUrl,

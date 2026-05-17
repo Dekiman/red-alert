@@ -1,4 +1,4 @@
-import { createLiveNewsCollector } from "../live-news-collector.js";
+import { executeNewsCollectionPipeline } from "./collector/runtime.js";
 
 export function createNewsRuntime(options) {
   const {
@@ -8,58 +8,75 @@ export function createNewsRuntime(options) {
     onNewsEvent
   } = options;
 
-  let liveNewsCollector;
+  let pollingTimer: any;
+
+  async function runPipeline(reason: string) {
+    try {
+      await executeNewsCollectionPipeline({
+        enabled: config.newsEnabled,
+        englishOnly: config.newsEnglishOnly,
+        includeWeatherEvents: config.newsIncludeWeather,
+        pollMs: config.newsPollMs,
+        fetchTimeoutMs: config.newsFetchTimeoutMs,
+        maxSignalsPerEvent: config.newsMaxSignalsPerEvent,
+        includeSourceTypes: config.newsSourceTypes,
+        providerNames: config.newsProviders,
+        maxEventsPerProvider: config.newsMaxEventsPerProvider,
+        gdacsApiUrl: config.newsGdacsApiUrl,
+        gdacsLookbackDays: config.newsGdacsLookbackDays,
+        usgsApiUrl: config.newsUsgsApiUrl,
+        gdeltApiUrl: config.newsGdeltApiUrl,
+        gdeltQuery: config.newsGdeltQuery,
+        gdeltMaxRecords: config.newsGdeltMaxRecords,
+        nwsApiUrl: config.newsNwsApiUrl,
+        weatherCanadaApiUrl: config.newsWeatherCanadaApiUrl,
+        meteoalarmApiUrl: config.newsMeteoalarmApiUrl,
+        database,
+        onNewsEvent
+      }, reason);
+    } catch (error: any) {
+      logger.error("news collection pipeline execution failed", { error: error?.message });
+    }
+  }
 
   function start() {
     if (!config.newsEnabled) {
-      logger.info("live news collector disabled");
+      logger.info("live news collector disabled by config");
       return;
     }
 
-    liveNewsCollector = createLiveNewsCollector({
-      enabled: config.newsEnabled,
-      englishOnly: config.newsEnglishOnly,
-      includeWeatherEvents: config.newsIncludeWeather,
-      pollMs: config.newsPollMs,
-      fetchTimeoutMs: config.newsFetchTimeoutMs,
-      maxSignalsPerEvent: config.newsMaxSignalsPerEvent,
-      includeSourceTypes: config.newsSourceTypes,
-      providerNames: config.newsProviders,
-      maxEventsPerProvider: config.newsMaxEventsPerProvider,
-      gdacsApiUrl: config.newsGdacsApiUrl,
-      gdacsLookbackDays: config.newsGdacsLookbackDays,
-      usgsApiUrl: config.newsUsgsApiUrl,
-      gdeltApiUrl: config.newsGdeltApiUrl,
-      gdeltQuery: config.newsGdeltQuery,
-      gdeltMaxRecords: config.newsGdeltMaxRecords,
-      nwsApiUrl: config.newsNwsApiUrl,
-      weatherCanadaApiUrl: config.newsWeatherCanadaApiUrl,
-      meteoalarmApiUrl: config.newsMeteoalarmApiUrl,
-      database,
-      onNewsEvent
-    });
+    if (pollingTimer) {
+      return;
+    }
 
-    liveNewsCollector.start();
+    logger.info("starting live news collection runner", { pollMs: config.newsPollMs });
+    
+    // Initial run
+    void runPipeline("startup");
+
+    pollingTimer = setInterval(() => {
+      void runPipeline("poll");
+    }, config.newsPollMs);
   }
 
   function stop() {
-    if (!liveNewsCollector) {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = undefined;
+      logger.info("stopped live news collection runner");
+    }
+  }
+
+  async function refreshOnce(reason: string) {
+    if (!config.newsEnabled) {
       return;
     }
-
-    try {
-      liveNewsCollector.stop();
-    } catch (error) {
-      logger.warn("error while stopping live news collector", {
-        error: error?.message
-      });
-    } finally {
-      liveNewsCollector = undefined;
-    }
+    await runPipeline(reason);
   }
 
   return {
     start,
-    stop
+    stop,
+    refreshOnce
   };
 }

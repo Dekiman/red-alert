@@ -1,4 +1,4 @@
-import { parseBooleanLike } from "./normalizers.js";
+import { parseBooleanLike } from "../../utils/primitives.js";
 import {
   clampSeverity,
   dedupeStrings,

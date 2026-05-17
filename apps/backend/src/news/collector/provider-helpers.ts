@@ -1,3 +1,5 @@
+export { dedupeStrings } from "../../utils/primitives.js";
+
 export function normalizeWhitespace(value: unknown) {
   return String(value ?? "")
     .replace(/\s+/g, " ")
@@ -18,20 +20,6 @@ export function decodeXmlEntities(value: unknown) {
     .replace(/&amp;/g, "&");
 }
 
-export function dedupeStrings(values: string[]) {
-  const seen = new Set<string>();
-  const deduped: string[] = [];
-  for (const value of values) {
-    const normalized = normalizeWhitespace(value).toLowerCase();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    deduped.push(normalizeWhitespace(value));
-  }
-  return deduped;
-}
-
 export function toIsoTimestamp(value: unknown) {
   if (value == null) {
     return null;
@@ -43,13 +31,11 @@ export function toIsoTimestamp(value: unknown) {
     }
 
     let numeric = value;
-    if (numeric > 1e14) {
-      numeric /= 1000;
-    }
-    if (numeric > 1e12) {
-      numeric /= 1000;
-    }
-    if (numeric > 1e10) {
+    // Handle seconds vs milliseconds for modern dates (roughly 2010 to 2050)
+    // 1e11 is a good threshold: 
+    //   1e11 seconds is in the year 5138.
+    //   1e11 milliseconds is in the year 1973.
+    if (numeric < 1e11) {
       numeric *= 1000;
     }
 
@@ -65,7 +51,8 @@ export function toIsoTimestamp(value: unknown) {
     return null;
   }
 
-  const gdeltMatch = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  // GDELT format: YYYYMMDDHHMMSS (no T, no Z sometimes)
+  const gdeltMatch = raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z?$/);
   if (gdeltMatch) {
     const [, year, month, day, hour, minute, second] = gdeltMatch;
     return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
