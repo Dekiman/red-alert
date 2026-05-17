@@ -1,9 +1,14 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Color, Vector3, AdditiveBlending, BackSide, MathUtils, LineBasicMaterial } from "three";
-import { latLngToVector3, getSubsolarPoint, getSublunarPoint, getRealTimeEarthRotation } from "./math";
+import { Color, Vector3, AdditiveBlending, BackSide, MathUtils, LineBasicMaterial, Quaternion } from "three";
+import { latLngToVector3, vector3ToLatLng, wrapLongitude, isPointInPolygon, getSubsolarPoint, getSublunarPoint, getRealTimeEarthRotation } from "./math";
 import { OrbitControls, Stars } from "@react-three/drei";
 import * as topojson from "topojson-client";
+
+/**
+ * Global cache for GeoBoundaries to avoid redundant fetches.
+ */
+const geoBoundaryCache: Record<string, any> = {};
 
 /**
  * Adaptive Orbit Controls
@@ -12,7 +17,7 @@ export function AdaptiveOrbitControls(props: any) {
   const controlsRef = useRef<any>(null);
   const { camera } = useThree();
   const MIN_DIST = 1.4;
-  const MAX_DIST = 5.0;
+  const MAX_DIST = 10.0;
 
   useFrame(() => {
     if (controlsRef.current) {
@@ -198,32 +203,29 @@ export function Globe(props: any) {
  * Marker3D Component
  */
 export function Marker3D(props: any) {
-  const { lat, lng, radius = 1.2, altitude = 0.014, color = "#ff5837", scale = 1, isPulse = false, showHalo = false, onClick } = props;
+  const { lat, lng, radius = 1.2, altitude = 0.012, color = "#ff5837", scale = 1, isPulse = false, showHalo = false, onClick } = props;
   const position = useMemo(() => latLngToVector3(lat, lng, radius + altitude), [lat, lng, radius, altitude]);
-  const groupRef = useRef<any>(null);
-
-  useFrame(() => {
-    if (groupRef.current) {
-      groupRef.current.lookAt(0, 0, 0);
-    }
-  });
-
+  
   return (
-    <group 
-      ref={groupRef} 
-      position={position} 
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-    >
-      <mesh scale={[0.08 * scale, 0.08 * scale, 1]}>
-        <circleGeometry args={[1, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.9} />
+    <group position={position}>
+      <mesh 
+        scale={[0.01 * scale, 0.01 * scale, 0.01 * scale]} 
+        renderOrder={30}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.();
+        }}
+      >
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color={color} />
       </mesh>
       {(showHalo || isPulse) && (
-        <mesh scale={[0.16 * scale, 0.16 * scale, 1]}>
-          <circleGeometry args={[1, 32]} />
+        <mesh 
+          scale={[0.02 * scale, 0.02 * scale, 0.02 * scale]} 
+          renderOrder={29}
+          onPointerDown={(e) => e.stopPropagation()} // Prevent dragging from triggering through halo
+        >
+          <sphereGeometry args={[1, 16, 16]} />
           <meshBasicMaterial color={color} transparent opacity={0.3} />
         </mesh>
       )}
@@ -242,7 +244,7 @@ export function BoundaryLayer(props: any) {
     color = "#ffffff"
   } = props;
   
-  const [geometries, setGeometries] = useState<Float32Array[]>([]);
+  const [geometry, setGeometry] = useState<Float32Array | null>(null);
   
   const material = useMemo(() => new LineBasicMaterial({
     color: new Color(color),
@@ -259,40 +261,45 @@ export function BoundaryLayer(props: any) {
         if (!objectKey) return;
 
         const geoMesh = topojson.mesh(topology, topology.objects[objectKey]);
-        const next: Float32Array[] = [];
+        const positions: number[] = [];
 
         if (geoMesh.type === "MultiLineString") {
           for (const line of geoMesh.coordinates) {
-            const positions: number[] = [];
-            for (const [lng, lat] of line) {
-              const p = latLngToVector3(lat, lng, radius + altitude);
-              positions.push(p.x, p.y, p.z);
+            for (let i = 0; i < line.length - 1; i++) {
+              const p1 = latLngToVector3(line[i][1], line[i][0], radius + altitude);
+              const p2 = latLngToVector3(line[i+1][1], line[i+1][0], radius + altitude);
+              positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
             }
-            next.push(new Float32Array(positions));
           }
         } else if (geoMesh.type === "LineString") {
-          const positions: number[] = [];
-          for (const [lng, lat] of (geoMesh as any).coordinates) {
-            const p = latLngToVector3(lat, lng, radius + altitude);
-            positions.push(p.x, p.y, p.z);
+          const line = (geoMesh as any).coordinates;
+          for (let i = 0; i < line.length - 1; i++) {
+            const p1 = latLngToVector3(line[i][1], line[i][0], radius + altitude);
+            const p2 = latLngToVector3(line[i+1][1], line[i+1][0], radius + altitude);
+            positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
           }
-          next.push(new Float32Array(positions));
         }
 
-        setGeometries(next);
+        if (positions.length > 0) {
+          setGeometry(new Float32Array(positions));
+        }
       });
   }, [url, radius, altitude]);
 
+  if (!geometry) return null;
+
   return (
-    <group>
-      {geometries.map((pos, i) => (
-        <lineLoop key={i} material={material} renderOrder={10}>
-          <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
-            <bufferAttribute attach="attributes-position" array={pos} count={pos.length / 3} itemSize={3} />
-          </bufferGeometry>
-        </lineLoop>
-      ))}
-    </group>
+    <lineSegments material={material} renderOrder={10}>
+      <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
+        <bufferAttribute 
+          attach="attributes-position" 
+          count={geometry.length / 3} 
+          array={geometry} 
+          itemSize={3} 
+          args={[geometry, 3]} 
+        />
+      </bufferGeometry>
+    </lineSegments>
   );
 }
 
@@ -301,7 +308,7 @@ export function BoundaryLayer(props: any) {
  */
 export function LocalityBoundaryLayer(props: any) {
   const { radius = 1.2, altitude = 0.012, color = "#4488ff" } = props;
-  const [geometries, setGeometries] = useState<Float32Array[]>([]);
+  const [geometry, setGeometry] = useState<Float32Array | null>(null);
   
   const material = useMemo(() => new LineBasicMaterial({
     color: new Color(color),
@@ -315,33 +322,243 @@ export function LocalityBoundaryLayer(props: any) {
       .then(res => res.json())
       .then(data => {
         if (!data.localities) return;
-        const next: Float32Array[] = [];
+        const positions: number[] = [];
         for (const loc of data.localities) {
           if (loc.polygon && loc.polygon.length > 2) {
-            const pos: number[] = [];
-            for (const [lat, lng] of loc.polygon) {
-              const p = latLngToVector3(lat, lng, radius + altitude);
-              pos.push(p.x, p.y, p.z);
+            for (let i = 0; i < loc.polygon.length; i++) {
+              const p1 = latLngToVector3(loc.polygon[i][0], loc.polygon[i][1], radius + altitude);
+              const nextIndex = (i + 1) % loc.polygon.length;
+              const p2 = latLngToVector3(loc.polygon[nextIndex][0], loc.polygon[nextIndex][1], radius + altitude);
+              positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
             }
-            // Close the loop
-            const start = latLngToVector3(loc.polygon[0][0], loc.polygon[0][1], radius + altitude);
-            pos.push(start.x, start.y, start.z);
-            next.push(new Float32Array(pos));
           }
         }
-        setGeometries(next);
+        if (positions.length > 0) {
+          setGeometry(new Float32Array(positions));
+        }
       });
   }, [radius, altitude]);
 
+  if (!geometry) return null;
+
   return (
-    <group>
-      {geometries.map((pos, i) => (
-        <lineLoop key={i} material={material} renderOrder={10}>
-          <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
-            <bufferAttribute attach="attributes-position" array={pos} count={pos.length / 3} itemSize={3} />
-          </bufferGeometry>
-        </lineLoop>
-      ))}
-    </group>
+    <lineSegments material={material} renderOrder={10}>
+      <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
+        <bufferAttribute 
+          attach="attributes-position" 
+          count={geometry.length / 3} 
+          array={geometry} 
+          itemSize={3} 
+          args={[geometry, 3]} 
+        />
+      </bufferGeometry>
+    </lineSegments>
+  );
+}
+
+/**
+ * GeoBoundaryLayer Component
+ * Fetches ADM1 or ADM2 boundaries for a specific country from our backend.
+ * Uses a global cache to avoid redundant fetches.
+ */
+export function GeoBoundaryLayer(props: { 
+  countryName: string; 
+  level?: "ADM1" | "ADM2";
+  radius?: number;
+  altitude?: number;
+  color?: string;
+  opacity?: number;
+}) {
+  const { 
+    countryName, 
+    level = "ADM1", 
+    radius = 1.2, 
+    altitude = 0.01, 
+    color = "#88ccff",
+    opacity = 0.6
+  } = props;
+  
+  const [geometry, setGeometry] = useState<Float32Array | null>(null);
+  
+  const material = useMemo(() => new LineBasicMaterial({
+    color: new Color(color),
+    transparent: true,
+    opacity: opacity,
+    depthWrite: false,
+  }), [color, opacity]);
+
+  useEffect(() => {
+    if (!countryName) {
+      setGeometry(null);
+      return;
+    }
+
+    const cacheKey = `${countryName}-${level}`;
+    if (geoBoundaryCache[cacheKey]) {
+      setGeometry(geoBoundaryCache[cacheKey]);
+      return;
+    }
+
+    const url = `/api/boundary-details?countryName=${encodeURIComponent(countryName)}&level=${level}`;
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error("Boundary not found");
+        return res.json();
+      })
+      .then(async data => {
+        let featureCollection = data.featureCollection;
+
+        if (data.staticPath) {
+          try {
+            const staticResp = await fetch(data.staticPath);
+            if (staticResp.ok) {
+              const topology = await staticResp.json();
+              // In our build script, we name the layer 'boundaries'
+              const features = topojson.feature(topology, topology.objects.boundaries as any);
+              featureCollection = features.type === "FeatureCollection" ? features : { type: "FeatureCollection", features: [features] };
+            }
+          } catch (e) {
+            console.warn("Failed to fetch static boundary, falling back", e);
+          }
+        }
+
+        if (!featureCollection) return;
+        
+        const positions: number[] = [];
+        const features = featureCollection.features || [];
+        
+        for (const feature of features) {
+          if (!feature.geometry) continue;
+          
+          const coords = feature.geometry.type === "Polygon" 
+            ? [feature.geometry.coordinates] 
+            : feature.geometry.type === "MultiPolygon"
+            ? feature.geometry.coordinates
+            : [];
+            
+          for (const polygon of coords) {
+            for (const ring of polygon) {
+              for (let i = 0; i < ring.length - 1; i++) {
+                const p1 = latLngToVector3(ring[i][1], ring[i][0], radius + altitude);
+                const p2 = latLngToVector3(ring[i+1][1], ring[i+1][0], radius + altitude);
+                positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+              }
+            }
+          }
+        }
+        
+        const floatArray = positions.length > 0 ? new Float32Array(positions) : null;
+        geoBoundaryCache[cacheKey] = floatArray;
+        setGeometry(floatArray);
+      })
+      .catch(() => {
+        setGeometry(null);
+      });
+  }, [countryName, level, radius, altitude]);
+
+  if (!geometry) return null;
+
+  return (
+    <lineSegments material={material} renderOrder={11}>
+      <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
+        <bufferAttribute 
+          attach="attributes-position" 
+          count={geometry.length / 3} 
+          array={geometry} 
+          itemSize={3} 
+          args={[geometry, 3]} 
+        />
+      </bufferGeometry>
+    </lineSegments>
+  );
+}
+
+/**
+ * AutoGeoBoundaryLayer Component
+ * Automatically detects the country directly under the camera when zoomed in.
+ */
+export function AutoGeoBoundaryLayer(props: {
+  radius?: number;
+  altitude?: number;
+  color?: string;
+  opacity?: number;
+}) {
+  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6 } = props;
+  const { camera } = useThree();
+  const [activeCountry, setActiveCountry] = useState<string | null>(null);
+  const [topology, setTopology] = useState<any>(null);
+
+  // Load world topology once for country lookup
+  useEffect(() => {
+    fetch("/assets/world-countries-50m.json")
+      .then(res => res.json())
+      .then(data => {
+        const objectKey = data.objects.countries ? "countries" : Object.keys(data.objects)[0];
+        const features = topojson.feature(data, data.objects[objectKey]) as any;
+        setTopology(features.features);
+      });
+  }, []);
+
+  useFrame(() => {
+    if (!topology) return;
+
+    const distance = camera.position.length();
+    // "More than halfway zoomed in" condition: distance < 5.7 (range 1.4 to 10.0)
+    if (distance > 5.7) {
+      if (activeCountry !== null) setActiveCountry(null);
+      return;
+    }
+
+    // Get the lat/lng directly under the camera
+    // We need to account for globe rotation
+    const rotationY = getRealTimeEarthRotation(new Date());
+    const cameraLatLng = vector3ToLatLng(camera.position);
+    
+    // local_lng = world_lng - rotation_y
+    const localLng = wrapLongitude(cameraLatLng.lng - MathUtils.radToDeg(rotationY));
+    const localLat = cameraLatLng.lat;
+
+    // Find country
+    let foundCountry: string | null = null;
+    for (const feature of topology) {
+      const geometry = feature.geometry;
+      if (!geometry) continue;
+
+      if (geometry.type === "Polygon") {
+        if (isPointInPolygon(localLng, localLat, geometry.coordinates)) {
+          foundCountry = feature.properties.name;
+          break;
+        }
+      } else if (geometry.type === "MultiPolygon") {
+        let insideMulti = false;
+        for (const polyCoords of geometry.coordinates) {
+          if (isPointInPolygon(localLng, localLat, polyCoords)) {
+            insideMulti = true;
+            break;
+          }
+        }
+        if (insideMulti) {
+          foundCountry = feature.properties.name;
+          break;
+        }
+      }
+    }
+
+    if (foundCountry !== activeCountry) {
+      setActiveCountry(foundCountry);
+    }
+  });
+
+  if (!activeCountry) return null;
+
+  return (
+    <GeoBoundaryLayer 
+      countryName={activeCountry} 
+      level="ADM2" 
+      radius={radius} 
+      altitude={altitude} 
+      color={color} 
+      opacity={opacity} 
+    />
   );
 }

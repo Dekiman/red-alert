@@ -21,6 +21,7 @@ const routes = app.route('/api', api);
 
 // Route WebSocket traffic to Durable Object
 app.get('/ui-socket', async (c) => {
+  console.log(`[Worker] Incoming UI socket request: ${c.req.url}`);
   const id = c.env.ALERT_BROADCASTER.idFromName("global-broadcaster");
   const obj = c.env.ALERT_BROADCASTER.get(id);
   return obj.fetch(c.req.raw);

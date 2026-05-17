@@ -23,6 +23,8 @@ export function AlertMapPanel({ newsEvents, alerts }: AlertMapPanelProps) {
   const selectedNewsEvent = selectedItem?.kind === "news" ? selectedItem.newsEvent : null;
   const selectedAlert = selectedItem?.kind === "alert" ? selectedItem.alert : null;
 
+  const selectedCountry = selectedNewsEvent?.country || (selectedAlert ? "Israel" : null);
+
   const selectedTitle =
     selectedItem?.kind === "news"
       ? String(selectedNewsEvent?.title ?? "")
@@ -55,6 +57,7 @@ export function AlertMapPanel({ newsEvents, alerts }: AlertMapPanelProps) {
           alerts={alerts} 
           newsEvents={newsEvents} 
           selectedEventId={selectedItem?.kind === "news" ? selectedItem.newsEvent?.eventId : null}
+          selectedCountry={selectedCountry}
           onSelect={handleSelect}
         />
         

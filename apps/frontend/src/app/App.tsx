@@ -1,4 +1,6 @@
 import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Renderer } from "@json-render/react";
+import { registry } from "./ui-registry.js";
 import { AlertMapPanel } from "./alert-map-panel.js";
 import type {
   AlertPayload,
@@ -347,107 +349,6 @@ function StatusDot({ mode }: StatusDotProps) {
   return <span className={className}></span>;
 }
 
-function AlertCard({ alert }: { alert: AlertPayload }) {
-  const hasHebrewLocation = alert.locations.some((value) => hasHebrew(value));
-  const locationClassName = hasHebrewLocation ? "locations rtl" : "locations";
-
-  return (
-    <article className="card alert-card">
-      <div className="card-head">
-        <strong>
-          {alert.locationCount} location{alert.locationCount === 1 ? "" : "s"}
-        </strong>
-        <span className="card-time">{formatTime(alert.alertTimestampIso)}</span>
-      </div>
-
-      <div className="tags">
-        <span className="tag">Source: {alert.source}</span>
-        <span className="tag">Threat: {alert.threat}</span>
-        <span className="tag">Drill: {alert.isDrill ? "Yes" : "No"}</span>
-        <span className="tag">ID: {alert.notificationId}</span>
-      </div>
-
-      <ul className={locationClassName}>
-        {alert.locations.map((locationText, index) => (
-          <li
-            key={`${alert.notificationId}-${locationText}-${index}`}
-            dir={hasHebrew(locationText) ? "rtl" : "ltr"}
-            lang={hasHebrew(locationText) ? "he" : "en"}
-          >
-            {locationText}
-          </li>
-        ))}
-      </ul>
-    </article>
-  );
-}
-
-function NewsCard({ newsEvent }: { newsEvent: NewsEventPayload }) {
-  const sourceTypes = Array.isArray(newsEvent.sourceTypes)
-    ? newsEvent.sourceTypes.join(", ")
-    : String(newsEvent.sourceTypesRaw || "");
-  const titleType = categorizeNewsTitleType(newsEvent);
-  const titleText = newsEvent.title || "Untitled news event";
-  const titleDir = hasHebrew(titleText) ? "rtl" : "ltr";
-  const titleLang = hasHebrew(titleText) ? "he" : "en";
-
-  const summaryText =
-    newsEvent.summary && newsEvent.summary !== newsEvent.title ? String(newsEvent.summary) : null;
-  const locationParts = [newsEvent.locationName, newsEvent.region, newsEvent.country].filter(Boolean);
-  const locationText = locationParts.length > 0 ? locationParts.join(" | ") : null;
-
-  return (
-    <article className="card news-card">
-      <div className="card-head">
-        <strong>{(newsEvent.category || "news").toUpperCase()}</strong>
-        <span className="card-time">{formatNewsTime(newsEvent.updatedAtIso || newsEvent.createdAtIso)}</span>
-      </div>
-
-      {newsEvent.primarySignalUrl ? (
-        <a
-          className="news-title-link"
-          href={newsEvent.primarySignalUrl}
-          target="_blank"
-          rel="noreferrer"
-          dir={titleDir}
-          lang={titleLang}
-        >
-          <span className="news-title">{titleText}</span>
-        </a>
-      ) : (
-        <p className="news-title" dir={titleDir} lang={titleLang}>
-          {titleText}
-        </p>
-      )}
-
-      {summaryText ? (
-        <p className="news-summary" dir={hasHebrew(summaryText) ? "rtl" : "ltr"} lang={hasHebrew(summaryText) ? "he" : "en"}>
-          {summaryText}
-        </p>
-      ) : null}
-
-      {locationText ? (
-        <p className="news-location" dir={hasHebrew(locationText) ? "rtl" : "ltr"} lang={hasHebrew(locationText) ? "he" : "en"}>
-          {locationText}
-        </p>
-      ) : null}
-
-      <div className="tags">
-        <span className="tag">Type: {titleType}</span>
-        <span className="tag">Severity: {newsEvent.severity ?? "n/a"}</span>
-        <span className="tag">Signals: {newsEvent.signalCount ?? 0}</span>
-        <span className="tag">Sources: {sourceTypes || "unknown"}</span>
-      </div>
-
-      {newsEvent.primarySignalUrl ? (
-        <a className="news-link" href={newsEvent.primarySignalUrl} target="_blank" rel="noreferrer">
-          Open source ({newsEvent.primarySourceName || "news"})
-        </a>
-      ) : null}
-    </article>
-  );
-}
-
 function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="metric">
@@ -455,6 +356,8 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
+
 
 function toReplayAlertPayload(event: PolygonReplayEventPayload): AlertPayload | null {
   const notificationId = String(event.notificationId ?? "").trim();
@@ -493,6 +396,8 @@ function toReplayAlertPayload(event: PolygonReplayEventPayload): AlertPayload | 
     alertTimestampIso
   };
 }
+
+const toSpec = (type: string, props: any) => ({ root: "r", elements: { r: { type, props } } });
 
 export function App() {
   const previousReplayActiveRef = useRef(false);
@@ -1082,7 +987,7 @@ export function App() {
                 <div className="empty">{newsFeedEmptyText}</div>
               ) : (
                 filteredNewsEvents.map((newsEvent: NewsEventPayload) => (
-                  <NewsCard key={newsEvent.eventId} newsEvent={newsEvent} />
+                  <Renderer key={newsEvent.eventId} registry={registry} spec={toSpec("NewsCard", newsEvent)} />
                 ))
               )}
             </div>
@@ -1132,9 +1037,10 @@ export function App() {
                   </div>
                 ) : (
                   visibleAlerts.map((alert) => (
-                    <AlertCard
+                    <Renderer
                       key={`${alert.notificationId}-${alert.alertTimestampIso || alert.receivedAtIso || "unknown"}`}
-                      alert={alert}
+                      registry={registry}
+                      spec={toSpec("AlertCard", alert)}
                     />
                   ))
                 )}

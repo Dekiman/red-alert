@@ -1,5 +1,6 @@
 const GEObOUNDARIES_METADATA_URL = "https://www.geoboundaries.org/api/current/gbOpen/ALL/ALL/";
 const SUPPORTED_LEVELS = new Set(["ADM1", "ADM2"]);
+const STATIC_ASSET_ISO_CODES = new Set(['FRA', 'DEU', 'ISR', 'USA', 'GBR', 'ITA', 'ESP', 'CAN', 'AUS', 'JPN']);
 
 const COUNTRY_NAME_ALIASES: Record<string, string[]> = {
   "antigua and barb": ["antigua and barbuda"],
@@ -152,10 +153,6 @@ function createGeoBoundariesCountryLookup(metadataEntries: GeoBoundariesMetadata
   return lookup;
 }
 
-function cloneJson<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
 function slugifyBoundarySnapshotValue(value: string) {
   const normalized = normalizeCountryName(value)
     .replace(/[^a-z0-9]+/g, "-")
@@ -220,21 +217,40 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
 
   async function getMetadataEntries() {
     if (!metadataPromise) {
-      metadataPromise = fetch(GEObOUNDARIES_METADATA_URL, {
-        headers: {
-          Accept: "application/json"
-        }
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error(`geoBoundaries metadata HTTP ${response.status}`);
+      metadataPromise = (async () => {
+        const cacheKey = "geoboundaries_metadata_v1";
+        try {
+          const cached = await kv.get(cacheKey, "json") as GeoBoundariesMetadata[] | null;
+          if (cached) {
+            return cached;
           }
-          return (await response.json()) as GeoBoundariesMetadata[];
-        })
-        .catch((error) => {
-          metadataPromise = null;
-          throw error;
+        } catch (e) {
+          logger?.warn?.("failed reading metadata from KV", { error: (e as any).message });
+        }
+
+        const response = await fetch(GEObOUNDARIES_METADATA_URL, {
+          headers: {
+            Accept: "application/json"
+          }
         });
+
+        if (!response.ok) {
+          throw new Error(`geoBoundaries metadata HTTP ${response.status}`);
+        }
+
+        const data = (await response.json()) as GeoBoundariesMetadata[];
+        
+        try {
+          await kv.put(cacheKey, JSON.stringify(data), { expirationTtl: 86400 * 7 });
+        } catch (e) {
+          logger?.warn?.("failed writing metadata to KV", { error: (e as any).message });
+        }
+
+        return data;
+      })().catch((error) => {
+        metadataPromise = null;
+        throw error;
+      });
     }
 
     return metadataPromise;
@@ -275,6 +291,13 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
       requestedCountryName,
       normalizedLevel
     );
+
+    // Try KV snapshot first for immediate response
+    const cached = await readBoundarySnapshot(kv, requestSnapshotKey, logger);
+    if (cached) {
+      return cached;
+    }
+
     let metadata = null;
     try {
       metadata = await resolveMetadata(requestedCountryName, normalizedLevel);
@@ -284,13 +307,25 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
         level: normalizedLevel,
         error: error?.message
       });
-      const snapshotPayload = await readBoundarySnapshot(kv, requestSnapshotKey, logger);
-      return snapshotPayload ? cloneJson(snapshotPayload) : null;
+      // Fallback already checked above, but keep for safety/retry if something changed
+      return await readBoundarySnapshot(kv, requestSnapshotKey, logger);
     }
 
     if (!metadata) {
-      const snapshotPayload = await readBoundarySnapshot(kv, requestSnapshotKey, logger);
-      return snapshotPayload ? cloneJson(snapshotPayload) : null;
+      return await readBoundarySnapshot(kv, requestSnapshotKey, logger);
+    }
+
+    // Phase 2: Static asset redirect if available
+    if (STATIC_ASSET_ISO_CODES.has(metadata.boundaryISO)) {
+      return {
+        ok: true,
+        source: "static_asset",
+        staticPath: `/boundaries/${metadata.boundaryISO.toLowerCase()}-${normalizedLevel.toLowerCase()}.topo.json`,
+        countryName: requestedCountryName,
+        matchedBoundaryName: metadata.boundaryName,
+        boundaryISO: metadata.boundaryISO,
+        level: normalizedLevel
+      };
     }
 
     const cacheKey = `${metadata.boundaryISO}:${normalizedLevel}`;
@@ -299,6 +334,7 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
       normalizedLevel
     );
     if (!detailCache.has(cacheKey)) {
+      const fetchStart = Date.now();
       detailCache.set(
         cacheKey,
         fetch(metadata.simplifiedGeometryGeoJSON ?? metadata.gjDownloadURL!, {
@@ -311,6 +347,13 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
               throw new Error(`geoBoundaries detail HTTP ${response.status}`);
             }
             const geojson = await response.json();
+            const duration = Date.now() - fetchStart;
+            logger?.info?.("fetched boundary detail from geoBoundaries", {
+              countryName: requestedCountryName,
+              boundaryISO: metadata.boundaryISO,
+              level: normalizedLevel,
+              durationMs: duration
+            });
             const payload = {
               ok: true,
               source: "geoBoundaries",
@@ -341,13 +384,13 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
     }
 
     const payload = await detailCache.get(cacheKey)!;
-    if (payload && payload.source !== "geoBoundaries_snapshot") {
+    if (payload && (payload as any).source !== "geoBoundaries_snapshot") {
       await writeBoundarySnapshot(kv, requestSnapshotKey, payload, logger);
       if (matchedSnapshotKey !== requestSnapshotKey) {
         await writeBoundarySnapshot(kv, matchedSnapshotKey, payload, logger);
       }
     }
-    return payload ? cloneJson(payload) : null;
+    return payload;
   }
 
   return {

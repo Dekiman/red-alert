@@ -100,3 +100,40 @@ export function getRealTimeEarthRotation(date: Date) {
   // So at 12:00 UTC, rotation should be 0.
   return MathUtils.degToRad(15 * (hour - 12));
 }
+
+/**
+ * Inverse of latLngToVector3: Converts a local position on the globe back to Lat/Lng.
+ */
+export function vector3ToLatLng(v: Vector3) {
+  const norm = v.clone().normalize();
+  const lat = Math.asin(norm.y) * (180 / Math.PI);
+  const lng = Math.atan2(norm.x, norm.z) * (180 / Math.PI);
+  return { lat, lng };
+}
+
+/**
+ * Standard ray-casting algorithm for point-in-polygon test.
+ * rings is an array of rings, each ring is an array of [lng, lat].
+ */
+export function isPointInPolygon(lng: number, lat: number, rings: any[][]) {
+  let inside = false;
+  for (const ring of rings) {
+    if (!ring || ring.length < 3) continue;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > lat) !== (yj > lat))
+          && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Wraps a degree value into the [-180, 180] range.
+ */
+export function wrapLongitude(lng: number) {
+  const mod = (lng + 180) % 360;
+  return (mod < 0 ? mod + 360 : mod) - 180;
+}

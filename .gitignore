@@ -4,3 +4,15 @@ data/
 node_modules/
 Guidelines.md
 debug-media/
+
+# Wrangler local state
+.wrangler/
+wrangler.toml.local
+
+# Agent skills and memory
+.agents/
+memory/
+*.md.tmp
+
+# Public build artifacts
+apps/frontend/public/boundaries/

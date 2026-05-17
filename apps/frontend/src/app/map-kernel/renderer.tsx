@@ -6,6 +6,8 @@ import {
   Marker3D, 
   BoundaryLayer, 
   LocalityBoundaryLayer,
+  GeoBoundaryLayer,
+  AutoGeoBoundaryLayer,
   SunHighlight, 
   AdaptiveOrbitControls, 
   Starfield,
@@ -18,12 +20,13 @@ export interface DashboardMapProps {
   alerts: AlertPayload[];
   newsEvents: NewsEventPayload[];
   selectedEventId?: string | null;
+  selectedCountry?: string | null;
   onSelect?: (item: { kind: "news" | "alert"; id: string; payload: any }) => void;
 }
 
 const SUN_DIRECTION: [number, number, number] = [1, 0.2, 0.5];
 
-export function DashboardMap({ alerts, newsEvents, selectedEventId, onSelect }: DashboardMapProps) {
+export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, onSelect }: DashboardMapProps) {
   const cameraProps = useMemo(() => ({ 
     position: [0, 0, 5.0] as [number, number, number], 
     fov: 34 
@@ -58,7 +61,13 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, onSelect }: 
           
           <LocalityBoundaryLayer 
             color="#4488ff" 
-            altitude={0.01} 
+            altitude={0.008} 
+          />
+
+          <AutoGeoBoundaryLayer 
+            color="#88ccff" 
+            altitude={0.007} 
+            opacity={0.8}
           />
           
           <group name="newsMarkers">

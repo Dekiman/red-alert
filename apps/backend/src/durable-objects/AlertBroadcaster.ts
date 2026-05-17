@@ -12,6 +12,7 @@ import { extractAlertsFromPayload, isLikelyAlertPayload } from "../alerts/payloa
 import { firstDefined, isObjectLike } from "../utils/primitives.js";
 
 export class AlertBroadcaster extends DurableObject {
+  env: Env;
   logger = createLogger("do-broadcaster");
   wsLogger = createLogger("do-ws");
   config: any;
@@ -56,13 +57,17 @@ export class AlertBroadcaster extends DurableObject {
 
     const uiBroadcaster = {
       broadcast: (payload: any) => {
-        const data = JSON.stringify(payload);
-        for (const ws of this.ctx.getWebSockets()) {
-          try {
-            ws.send(data);
-          } catch (e) {
-            // ignore
+        try {
+          const data = JSON.stringify(payload);
+          for (const ws of this.ctx.getWebSockets()) {
+            try {
+              ws.send(data);
+            } catch (e) {
+              // ignore
+            }
           }
+        } catch (e) {
+          this.logger.error("failed to broadcast payload", { error: (e as any).message });
         }
       }
     };
@@ -94,20 +99,27 @@ export class AlertBroadcaster extends DurableObject {
     this.publishSystemMessage = systemMessagePipeline.publishSystemMessage;
 
     ctx.blockConcurrencyWhile(async () => {
-      await this.localityMapRuntime.start(env.CACHE_KV);
-      
-      const alerts = await this.db.alerts.getRecent(this.config.uiHistorySize);
-      this.recentAlerts.push(...alerts);
-      this.logger.info("loaded initial alerts", { count: alerts.length });
-      
-      const newsFeed = await this.db.news.getFeed({ limit: this.config.uiNewsHistorySize });
-      this.recentNewsEvents.push(...newsFeed.events);
-      this.logger.info("loaded initial news feed", { 
-        count: newsFeed.events.length, 
-        limit: this.config.uiNewsHistorySize 
-      });
+      try {
+        await this.localityMapRuntime.start(env.CACHE_KV);
+        
+        const alerts = await this.db.alerts.getRecent(this.config.uiHistorySize);
+        this.recentAlerts.push(...alerts);
+        this.logger.info("loaded initial alerts", { count: alerts.length });
+        
+        const newsFeed = await this.db.news.getFeed({ limit: this.config.uiNewsHistorySize });
+        this.recentNewsEvents.push(...newsFeed.events);
+        this.logger.info("loaded initial news feed", { 
+          count: newsFeed.events.length, 
+          limit: this.config.uiNewsHistorySize 
+        });
+      } catch (e: any) {
+        this.logger.error("failed initial DO hydration", { error: e.message });
+      }
 
-      await this.ensureUpstreamConnection();
+      // Do NOT await upstream connection here to avoid blocking UI clients
+      this.ensureUpstreamConnection().catch(err => {
+        this.wsLogger.error("initial upstream connection failed", { error: err.message });
+      });
     });
   }
 
@@ -224,18 +236,26 @@ export class AlertBroadcaster extends DurableObject {
 
       this.ctx.acceptWebSocket(server);
 
-      const snapshot = {
-        type: "snapshot",
-        alerts: this.recentAlerts,
-        newsEvents: this.recentNewsEvents,
-        serverTimeIso: new Date().toISOString()
-      };
-      
-      server.send(JSON.stringify(snapshot));
-      this.logger.info("sent snapshot to new ui client", { 
-        alerts: this.recentAlerts.length, 
-        newsEvents: this.recentNewsEvents.length 
-      });
+      try {
+        const snapshot = {
+          type: "snapshot",
+          alerts: this.recentAlerts.map(a => this.sanitizeAlertForUi(a)),
+          newsEvents: this.recentNewsEvents.map(e => this.sanitizeNewsEventForUi(e)),
+          serverTimeIso: new Date().toISOString()
+        };
+        
+        const data = JSON.stringify(snapshot);
+        if (data.length > 800000) {
+          this.logger.warn("snapshot size is large", { bytes: data.length });
+        }
+        server.send(data);
+        this.logger.info("sent snapshot to new ui client", { 
+          alerts: this.recentAlerts.length, 
+          newsEvents: this.recentNewsEvents.length 
+        });
+      } catch (e) {
+        this.logger.error("failed to send snapshot to new ui client", { error: (e as any).message });
+      }
 
       return new Response(null, {
         status: 101,
@@ -244,6 +264,18 @@ export class AlertBroadcaster extends DurableObject {
     }
 
     return new Response("Not found", { status: 404 });
+  }
+
+  sanitizeAlertForUi(alert: any) {
+    if (!alert) return alert;
+    const { rawPayload, ...sanitized } = alert;
+    return sanitized;
+  }
+
+  sanitizeNewsEventForUi(event: any) {
+    if (!event) return event;
+    const { rawPayload, signals, ...sanitized } = event;
+    return sanitized;
   }
 
   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {

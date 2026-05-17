@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { StateProvider } from "@json-render/react";
+import { StateProvider, VisibilityProvider, ActionProvider } from "@json-render/react";
 import { routeTree } from './routeTree.gen'
 import { jsonRenderStore } from "./stores/useDashboardStore";
 import "./index.css";
@@ -29,7 +29,11 @@ if (!rootNode) {
 createRoot(rootNode).render(
   <QueryClientProvider client={queryClient}>
     <StateProvider store={jsonRenderStore}>
-      <RouterProvider router={router} />
+      <VisibilityProvider>
+        <ActionProvider>
+          <RouterProvider router={router} />
+        </ActionProvider>
+      </VisibilityProvider>
     </StateProvider>
   </QueryClientProvider>
 );

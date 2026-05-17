@@ -239,9 +239,8 @@ const api = new Hono<{ Bindings: Env }>()
     const countryName = String(c.req.query('countryName') ?? "").trim();
     const level = String(c.req.query('level') ?? "ADM1").trim().toUpperCase();
     
-    c.header("Cache-Control", "no-store");
-
     if (!countryName) {
+      c.header("Cache-Control", "no-store");
       c.status(400);
       return c.json({
         ok: false,
@@ -252,6 +251,7 @@ const api = new Hono<{ Bindings: Env }>()
     const payload = await boundaryDetailService.getBoundaryDetail({ countryName, level });
 
     if (!payload) {
+      c.header("Cache-Control", "no-store");
       c.status(404);
       return c.json({
         ok: false,
@@ -261,6 +261,7 @@ const api = new Hono<{ Bindings: Env }>()
       });
     }
 
+    c.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=3600");
     return c.json(payload);
   });
 

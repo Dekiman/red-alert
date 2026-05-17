@@ -7,6 +7,12 @@
       "skillPath": "skills/react-three-fiber/SKILL.md",
       "computedHash": "33cfac131cbe9c89b14c4b49ca01e0b0a4a3f9c23bb6c81ac0514143703283e8"
     },
+    "shadcn": {
+      "source": "vercel-labs/json-render",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "d6a9be8eeedea18343b5b15d6ac481a55436fe40db4b65d59858388072c239c4"
+    },
     "zustand": {
       "source": "vercel-labs/json-render",
       "sourceType": "github",
