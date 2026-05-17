@@ -1,7 +1,9 @@
-import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Renderer } from "@json-render/react";
 import { registry } from "./ui-registry.js";
-import { AlertMapPanel } from "./alert-map-panel.js";
+
+const AlertMapPanel = lazy(() => import("./alert-map-panel.js").then(m => ({ default: m.AlertMapPanel })));
+
 import type {
   AlertPayload,
   LiveNewsEventTypeCountPayload,
@@ -783,7 +785,9 @@ export function App() {
 
   return (
     <main className={`app-shell${isNewsFeedCollapsed ? " news-feed-collapsed" : ""}`}>
-      <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} />
+      <Suspense fallback={<div className="map-placeholder" />}>
+        <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} />
+      </Suspense>
 
       <div className="interface-overlay">
         <section
