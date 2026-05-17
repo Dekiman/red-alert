@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import type { NewsEventPayload, AlertPayload } from "./contracts.js";
 import { formatNewsTime, hasHebrew } from "./text-utils.js";
-import { DashboardMap } from "./map-kernel/renderer";
+
+const DashboardMap = lazy(() => import("./map-kernel/renderer").then(m => ({ default: m.DashboardMap })));
 
 interface AlertMapPanelProps {
   newsEvents: NewsEventPayload[];
@@ -53,13 +54,15 @@ export function AlertMapPanel({ newsEvents, alerts }: AlertMapPanelProps) {
   return (
     <section className="alert-map alert-map-stage" aria-label="Global threat globe">
       <div className="alert-map-shell">
-        <DashboardMap 
-          alerts={alerts} 
-          newsEvents={newsEvents} 
-          selectedEventId={selectedItem?.kind === "news" ? selectedItem.newsEvent?.eventId : null}
-          selectedCountry={selectedCountry}
-          onSelect={handleSelect}
-        />
+        <Suspense fallback={<div className="alert-map-loading">Loading Orbital View...</div>}>
+          <DashboardMap 
+            alerts={alerts} 
+            newsEvents={newsEvents} 
+            selectedEventId={selectedItem?.kind === "news" ? selectedItem.newsEvent?.eventId : null}
+            selectedCountry={selectedCountry}
+            onSelect={handleSelect}
+          />
+        </Suspense>
         
         <div className="globe-overlay globe-overlay-toolbar">
           <div className="globe-toolbar">

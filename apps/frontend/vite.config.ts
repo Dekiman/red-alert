@@ -29,7 +29,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
+            'three': ['three'],
+            'fiber': ['@react-three/fiber'],
+            'drei': ['@react-three/drei'],
             'ui-vendor': ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query'],
             'json-render-vendor': ['@json-render/core', '@json-render/react', '@json-render/shadcn']
           }
