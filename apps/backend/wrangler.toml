@@ -5,11 +5,11 @@ compatibility_flags = ["nodejs_compat"]
 
 [[kv_namespaces]]
 binding = "ALERTS_KV"
-id = "alerts_kv_mock_id"
+id = "9c2055b0b0164a0eb2a0f8954a782346"
 
 [[kv_namespaces]]
 binding = "CACHE_KV"
-id = "cache_kv_mock_id"
+id = "feab25aac36840c2b2916c2f600a6c2b"
 
 [triggers]
 crons = ["* * * * *"]  # every minute
@@ -21,4 +21,4 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["AlertBroadcaster"]
+new_sqlite_classes = ["AlertBroadcaster"]
