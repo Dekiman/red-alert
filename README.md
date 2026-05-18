@@ -77,5 +77,5 @@ bun --filter backend deploy
 
 ## Deployment Targets
 
-- **Backend**: `https://red-alert-backend.red-alert.workers.dev`
+- **Backend**: `https://red-alert-backend.galmankedi.workers.dev`
 - **Frontend**: Managed by Vercel, proxying `/api` and `/ui-socket` to the Cloudflare backend.

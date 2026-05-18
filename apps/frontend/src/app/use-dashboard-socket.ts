@@ -38,7 +38,7 @@ function resolveSocketUrl(socketPath: string) {
   // In production (Vercel), we MUST connect directly to Cloudflare for WebSockets
   // because Vercel rewrites do not support WebSocket protocol upgrades.
   if (import.meta.env.PROD) {
-    const productionBackend = "wss://red-alert-backend.red-alert.workers.dev";
+    const productionBackend = "wss://red-alert-backend.galmankedi.workers.dev";
     const normalizedSocketPath = socketPath.startsWith("/") ? socketPath : `/${socketPath}`;
     return `${productionBackend}${normalizedSocketPath}`;
   }
