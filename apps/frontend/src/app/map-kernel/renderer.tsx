@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { 
@@ -27,6 +27,9 @@ export interface DashboardMapProps {
 const SUN_DIRECTION: [number, number, number] = [1, 0.2, 0.5];
 
 export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, onSelect }: DashboardMapProps) {
+  const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
   const cameraProps = useMemo(() => ({ 
     position: [0, 0, 5.0] as [number, number, number], 
     fov: 34 
@@ -36,8 +39,19 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
     type: THREE.PCFShadowMap
   }), []);
 
+  // Update tooltip position natively to avoid React re-renders on every mouse move
+  useEffect(() => {
+    const updateTooltip = (e: MouseEvent) => {
+      if (tooltipRef.current) {
+        tooltipRef.current.style.transform = `translate3d(${e.clientX + 16}px, ${e.clientY + 16}px, 0)`;
+      }
+    };
+    window.addEventListener("mousemove", updateTooltip);
+    return () => window.removeEventListener("mousemove", updateTooltip);
+  }, []);
+
   return (
-    <div className="alert-map" style={{ width: "100%", height: "100%" }}>
+    <div className="alert-map" style={{ width: "100%", height: "100%", position: "relative" }}>
       <Canvas 
         camera={cameraProps} 
         shadows={shadowProps}
@@ -68,6 +82,7 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
             color="#88ccff" 
             altitude={0.007} 
             opacity={0.8}
+            onHover={setHoveredCountry}
           />
           
           <group name="newsMarkers">
@@ -111,6 +126,15 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
         
         <AdaptiveOrbitControls />
       </Canvas>
+
+      {hoveredCountry && (
+        <div 
+          ref={tooltipRef} 
+          className="pointer-events-none fixed top-0 left-0 bg-slate-900/90 text-slate-100 px-3 py-1.5 rounded-md text-sm font-medium shadow-2xl z-[100] border border-slate-700/50 backdrop-blur-sm whitespace-nowrap"
+        >
+          {hoveredCountry}
+        </div>
+      )}
     </div>
   );
 }

@@ -482,8 +482,9 @@ export function AutoGeoBoundaryLayer(props: {
   altitude?: number;
   color?: string;
   opacity?: number;
+  onHover?: (country: string | null) => void;
 }) {
-  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6 } = props;
+  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6, onHover } = props;
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const [topology, setTopology] = useState<any>(null);
 
@@ -504,7 +505,10 @@ export function AutoGeoBoundaryLayer(props: {
     const distance = e.camera.position.length();
     // "More than halfway zoomed in" condition: distance < 5.7 (range 1.4 to 10.0)
     if (distance > 5.7) {
-      if (activeCountry !== null) setActiveCountry(null);
+      if (activeCountry !== null) {
+        setActiveCountry(null);
+        onHover?.(null);
+      }
       return;
     }
 
@@ -545,7 +549,13 @@ export function AutoGeoBoundaryLayer(props: {
 
     if (foundCountry !== activeCountry) {
       setActiveCountry(foundCountry);
+      onHover?.(foundCountry);
     }
+  };
+
+  const handlePointerOut = () => {
+    setActiveCountry(null);
+    onHover?.(null);
   };
 
   return (
@@ -553,7 +563,7 @@ export function AutoGeoBoundaryLayer(props: {
       {/* Invisible raycasting mesh */}
       <mesh 
         onPointerMove={handlePointerMove}
-        onPointerOut={() => setActiveCountry(null)}
+        onPointerOut={handlePointerOut}
       >
         <sphereGeometry args={[radius, 64, 64]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
