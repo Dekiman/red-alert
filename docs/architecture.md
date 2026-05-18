@@ -4,6 +4,8 @@
 
 Red Alert + Live News is a real-time monitoring dashboard that combines Israeli security alerts ("Tzeva Adom") with global news events and OSINT signals. It provides a highly accurate, real-time 3D globe visualization that synchronizes Earth's rotation and astronomical markers (Sun/Moon) with the current UTC time.
 
+The entire project is managed as a **Bun monorepo**, utilizing Bun for its runtime, package management, and high-performance developer tooling (oxlint, tsgo).
+
 ## System Diagram
 
 ```mermaid

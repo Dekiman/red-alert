@@ -26,14 +26,19 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist",
       emptyOutDir: true,
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'three': ['three'],
-            'fiber': ['@react-three/fiber'],
-            'drei': ['@react-three/drei'],
-            'ui-vendor': ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query'],
-            'json-render-vendor': ['@json-render/core', '@json-render/react', '@json-render/shadcn']
+          manualChunks: (id) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('three')) return 'three';
+              if (id.includes('@react-three/fiber')) return 'fiber';
+              if (id.includes('@react-three/drei')) return 'drei';
+              if (id.includes('radix-ui') || id.includes('lucide-react')) return 'ui-vendor';
+              if (id.includes('@tanstack')) return 'tanstack-vendor';
+              if (id.includes('@json-render')) return 'json-render-vendor';
+              return 'vendor';
+            }
           }
         }
       }

@@ -2,13 +2,14 @@
 
 ## Tech Stack
 
--   **Framework**: React (TypeScript)
--   **Routing**: TanStack Router
--   **State Management**: Zustand
--   **Data Fetching**: TanStack Query (React Query)
--   **3D Rendering**: `@json-render/react-three-fiber` (based on Three.js)
--   **Styling**: Vanilla CSS + Tailwind CSS (for UI components)
--   **UI Components**: Shadcn UI (Radix UI)
+-   **Framework**: [React 19](https://react.dev/)
+-   **Build Tool**: [Vite](https://vitejs.dev/)
+-   **Routing**: [TanStack Router](https://tanstack.com/router) (Type-safe)
+-   **Data Fetching**: [TanStack Query](https://tanstack.com/query)
+-   **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+-   **3D Rendering**: [`@json-render/react-three-fiber`](https://r3f.docs.pmnd.rs/) (Three.js)
+-   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
+-   **UI Architecture**: `@json-render` (core, react, zustand, shadcn)
 
 ## Application Structure
 

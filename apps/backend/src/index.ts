@@ -13,7 +13,7 @@ export { AlertBroadcaster } from './durable-objects/AlertBroadcaster.js';
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('/*', cors({
-  origin: ['http://localhost:5173', 'https://your-frontend.vercel.app', 'http://127.0.0.1:5173'],
+  origin: ['http://localhost:5173', 'https://red-alert-frontend.vercel.app', 'http://127.0.0.1:5173'],
 }));
 
 // Mount the API routes under /api

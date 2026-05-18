@@ -5,15 +5,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://backend.red-alert.workers.dev/api/$1"
+      "destination": "https://red-alert-backend.red-alert.workers.dev/api/$1"
     },
     {
       "source": "/health",
-      "destination": "https://backend.red-alert.workers.dev/health"
+      "destination": "https://red-alert-backend.red-alert.workers.dev/health"
     },
     {
       "source": "/ui-socket",
-      "destination": "https://backend.red-alert.workers.dev/ui-socket"
+      "destination": "https://red-alert-backend.red-alert.workers.dev/ui-socket"
     }
   ]
 }

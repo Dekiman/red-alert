@@ -2,11 +2,12 @@
 
 ## Tech Stack
 
--   **Runtime**: Cloudflare Workers
--   **Framework**: Hono
+-   **Runtime**: [Bun](https://bun.sh/) (local development and scripts) / Cloudflare Workers (production)
+-   **Framework**: [Hono](https://hono.dev/) (Web Standard based)
 -   **State Management**: Cloudflare Durable Objects (`AlertBroadcaster`)
--   **Storage**: Cloudflare KV
+-   **Storage**: Cloudflare KV (`ALERTS_KV`, `CACHE_KV`)
 -   **Validation**: Zod (via Shared Schemas)
+-   **Tooling**: Wrangler, oxlint, tsgo
 
 ## Service Architecture
 

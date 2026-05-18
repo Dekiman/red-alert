@@ -22,17 +22,28 @@ interface DashboardSocketOptions {
 }
 
 function resolveSocketUrl(socketPath: string) {
+  const backendTarget = import.meta.env.VITE_BACKEND_TARGET;
+
   if (socketPath.startsWith("ws://") || socketPath.startsWith("wss://")) {
     return socketPath;
   }
 
-  const backendTarget = import.meta.env.VITE_BACKEND_TARGET;
+  // If VITE_BACKEND_TARGET is a full URL, use it as the base for WebSocket
   if (backendTarget && backendTarget.startsWith("http")) {
     const wsUrl = backendTarget.replace(/^http/, "ws");
     const normalizedSocketPath = socketPath.startsWith("/") ? socketPath : `/${socketPath}`;
     return `${wsUrl}${normalizedSocketPath}`;
   }
 
+  // In production (Vercel), we MUST connect directly to Cloudflare for WebSockets
+  // because Vercel rewrites do not support WebSocket protocol upgrades.
+  if (import.meta.env.PROD) {
+    const productionBackend = "wss://red-alert-backend.red-alert.workers.dev";
+    const normalizedSocketPath = socketPath.startsWith("/") ? socketPath : `/${socketPath}`;
+    return `${productionBackend}${normalizedSocketPath}`;
+  }
+
+  // Local development fallback
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const normalizedSocketPath = socketPath.startsWith("/") ? socketPath : `/${socketPath}`;
   return `${wsProtocol}//${window.location.host}${normalizedSocketPath}`;
