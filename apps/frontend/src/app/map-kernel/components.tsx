@@ -289,7 +289,7 @@ export function BoundaryLayer(props: any) {
   if (!geometry) return null;
 
   return (
-    <lineSegments material={material} renderOrder={10}>
+    <lineSegments material={material} renderOrder={10} pointerEvents="none">
       <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
         <bufferAttribute 
           attach="attributes-position" 
@@ -342,7 +342,7 @@ export function LocalityBoundaryLayer(props: any) {
   if (!geometry) return null;
 
   return (
-    <lineSegments material={material} renderOrder={10}>
+    <lineSegments material={material} renderOrder={10} pointerEvents="none">
       <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
         <bufferAttribute 
           attach="attributes-position" 
@@ -459,7 +459,7 @@ export function GeoBoundaryLayer(props: {
   if (!geometry) return null;
 
   return (
-    <lineSegments material={material} renderOrder={11}>
+    <lineSegments material={material} renderOrder={11} pointerEvents="none">
       <bufferGeometry onUpdate={self => self.computeBoundingSphere()}>
         <bufferAttribute 
           attach="attributes-position" 
@@ -475,16 +475,16 @@ export function GeoBoundaryLayer(props: {
 
 /**
  * AutoGeoBoundaryLayer Component
- * Automatically detects the country directly under the camera when zoomed in.
+ * Automatically detects the country under the pointer when zoomed in.
  */
 export function AutoGeoBoundaryLayer(props: {
   radius?: number;
   altitude?: number;
   color?: string;
   opacity?: number;
+  onHover?: (country: string | null) => void;
 }) {
-  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6 } = props;
-  const { camera } = useThree();
+  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6, onHover } = props;
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const [topology, setTopology] = useState<any>(null);
 
@@ -499,24 +499,27 @@ export function AutoGeoBoundaryLayer(props: {
       });
   }, []);
 
-  useFrame(() => {
+  const handlePointerMove = (e: any) => {
     if (!topology) return;
 
-    const distance = camera.position.length();
+    const distance = e.camera.position.length();
     // "More than halfway zoomed in" condition: distance < 5.7 (range 1.4 to 10.0)
     if (distance > 5.7) {
-      if (activeCountry !== null) setActiveCountry(null);
+      if (activeCountry !== null) {
+        setActiveCountry(null);
+        onHover?.(null);
+      }
       return;
     }
 
-    // Get the lat/lng directly under the camera
+    // Get the lat/lng of the intersection point
     // We need to account for globe rotation
     const rotationY = getRealTimeEarthRotation(new Date());
-    const cameraLatLng = vector3ToLatLng(camera.position);
-    
+    const hitLatLng = vector3ToLatLng(e.point);
+
     // local_lng = world_lng - rotation_y
-    const localLng = wrapLongitude(cameraLatLng.lng - MathUtils.radToDeg(rotationY));
-    const localLat = cameraLatLng.lat;
+    const localLng = wrapLongitude(hitLatLng.lng - MathUtils.radToDeg(rotationY));
+    const localLat = hitLatLng.lat;
 
     // Find country
     let foundCountry: string | null = null;
@@ -546,19 +549,36 @@ export function AutoGeoBoundaryLayer(props: {
 
     if (foundCountry !== activeCountry) {
       setActiveCountry(foundCountry);
+      onHover?.(foundCountry);
     }
-  });
+  };
 
-  if (!activeCountry) return null;
+  const handlePointerOut = () => {
+    setActiveCountry(null);
+    onHover?.(null);
+  };
 
   return (
-    <GeoBoundaryLayer 
-      countryName={activeCountry} 
-      level="ADM2" 
-      radius={radius} 
-      altitude={altitude} 
-      color={color} 
-      opacity={opacity} 
-    />
+    <group>
+      {/* Invisible raycasting mesh */}
+      <mesh 
+        onPointerMove={handlePointerMove}
+        onPointerOut={handlePointerOut}
+      >
+        <sphereGeometry args={[radius, 64, 64]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      {activeCountry && (
+        <GeoBoundaryLayer 
+          countryName={activeCountry} 
+          level="ADM2" 
+          radius={radius} 
+          altitude={altitude} 
+          color={color} 
+          opacity={opacity}
+        />
+      )}
+    </group>
   );
 }
