@@ -31,12 +31,11 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: (id) => {
             if (id.includes('node_modules')) {
-              if (id.includes('three')) return 'three';
-              if (id.includes('@react-three/fiber')) return 'fiber';
-              if (id.includes('@react-three/drei')) return 'drei';
-              if (id.includes('radix-ui') || id.includes('lucide-react')) return 'ui-vendor';
-              if (id.includes('@tanstack')) return 'tanstack-vendor';
-              if (id.includes('@json-render')) return 'json-render-vendor';
+              // Three.js is very large, keep it separate
+              if (id.includes('three')) {
+                return 'three';
+              }
+              // Keep all other vendors together to avoid circular dependencies and React scope issues
               return 'vendor';
             }
           }
