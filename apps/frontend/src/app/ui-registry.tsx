@@ -25,8 +25,8 @@ export const { registry } = defineRegistry(uiCatalog, {
       const direction = hasHebrewLocation ? "rtl" : "ltr";
 
       return (
-        <Card className="group relative border border-white/10 bg-black/40 p-0 overflow-hidden transition-colors duration-200 hover:border-red-500/30">
-          <div className="flex flex-col gap-4 p-4">
+        <Card className="group relative border border-white/10 bg-black/40 p-0 transition-colors duration-200 hover:border-red-500/30 min-h-[140px]">
+          <div className="flex flex-col gap-4 p-4 h-full">
             <div className="flex justify-between items-baseline gap-2">
               <h4 className="text-[13px] font-bold tracking-tight text-red-500 uppercase">
                 {locationCount}&nbsp;Location{locationCount === 1 ? "" : "s"}
@@ -86,8 +86,8 @@ export const { registry } = defineRegistry(uiCatalog, {
       const isCritical = newsEvent.severity && newsEvent.severity >= 4;
 
       return (
-        <Card className="group relative border border-white/10 bg-black/40 p-0 overflow-hidden transition-colors duration-200 hover:border-emerald-500/30">
-          <div className="flex flex-col gap-3 p-4">
+        <Card className="group relative border border-white/10 bg-black/40 p-0 transition-colors duration-200 hover:border-emerald-500/30 min-h-[180px]">
+          <div className="flex flex-col gap-3 p-4 h-full">
             <div className="flex justify-between items-center gap-2 mb-1">
               <span className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-500">
                 {(newsEvent.category || "News").toUpperCase()}
@@ -121,7 +121,7 @@ export const { registry } = defineRegistry(uiCatalog, {
             </div>
 
             {summaryText && (
-              <p className={`text-[12px] leading-relaxed text-slate-400 line-clamp-3 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"} text-pretty`}>
+              <p className={`text-[12px] leading-relaxed text-slate-400 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"} text-pretty`}>
                 {summaryText}
               </p>
             )}

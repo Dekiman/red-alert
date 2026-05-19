@@ -12,6 +12,8 @@ interface DashboardState {
   bufferedAlerts: number;
   bufferedNewsEvents: number;
   updatedAt: string;
+  selectedCountry: string | null;
+  [key: string]: any;
   setAlerts: (alerts: AlertPayload[]) => void;
   addAlert: (alert: AlertPayload) => void;
   setNewsEvents: (events: NewsEventPayload[]) => void;
@@ -19,6 +21,7 @@ interface DashboardState {
   setConnectionState: (state: "live" | "down" | "connecting", text?: string) => void;
   setStats: (stats: { uiClients: number; bufferedAlerts: number; bufferedNewsEvents: number }) => void;
   setUpdatedAt: (time: string) => void;
+  setSelectedCountry: (country: string | null) => void;
 }
 
 export const dashboardStore = createStore<DashboardState>((set) => ({
@@ -30,6 +33,7 @@ export const dashboardStore = createStore<DashboardState>((set) => ({
   bufferedAlerts: 0,
   bufferedNewsEvents: 0,
   updatedAt: "-",
+  selectedCountry: null,
   setAlerts: (alerts) => set((state) => {
     if (state.alerts === alerts) return state;
     return { alerts };
@@ -66,6 +70,10 @@ export const dashboardStore = createStore<DashboardState>((set) => ({
   setUpdatedAt: (updatedAt) => set((state) => {
     if (state.updatedAt === updatedAt) return state;
     return { updatedAt };
+  }),
+  setSelectedCountry: (selectedCountry) => set((state) => {
+    if (state.selectedCountry === selectedCountry) return state;
+    return { selectedCountry };
   }),
 }));
 

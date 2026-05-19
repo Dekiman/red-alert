@@ -24,6 +24,7 @@ export interface DashboardMapProps {
   selectedCountry?: string | null;
   date?: Date;
   onSelect?: (item: { kind: "news" | "alert"; id: string; payload: any }) => void;
+  onSelectCountry?: (country: string | null) => void;
 }
 
 /**
@@ -38,7 +39,7 @@ function SunSynchronizer({ onSunDirChange, date = new Date() }: { onSunDirChange
   return null;
 }
 
-export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, date = new Date(), onSelect }: DashboardMapProps) {
+export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, date = new Date(), onSelect, onSelectCountry }: DashboardMapProps) {
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [sunDirection, setSunDirection] = useState<[number, number, number]>([1, 0.2, 0.5]);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -98,6 +99,8 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
             altitude={0.007} 
             opacity={0.8}
             onHover={setHoveredCountry}
+            onSelect={onSelectCountry}
+            selectedCountry={selectedCountry}
             date={date}
           />
           
