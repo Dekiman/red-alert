@@ -1519,10 +1519,6 @@
           min-width: 0;
         }
 
-        .panel-collapse-btn {
-          display: none;
-        }
-
         .globe-overlay-toolbar {
           top: clamp(152px, 24vh, 220px);
           bottom: auto;

@@ -421,7 +421,7 @@ export function App() {
 
   const [isTimelineReplayActive, setIsTimelineReplayActive] = useState(false);
   const [replayTimelineState, setReplayTimelineState] = useState<ReplayTimelineState>(DEFAULT_REPLAY_TIMELINE_STATE);
-  const [isWatchfloorCollapsed, setIsWatchfloorCollapsed] = useState(false);
+  const [isWatchfloorCollapsed, setIsWatchfloorCollapsed] = useState(true);
   const [isNewsFeedCollapsed, setIsNewsFeedCollapsed] = useState(false);
   const [isAlertsPanelCollapsed, setIsAlertsPanelCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<"globe" | "news" | "alerts">("globe");
