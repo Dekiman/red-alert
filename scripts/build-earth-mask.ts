@@ -37,11 +37,37 @@ async function run() {
       for (let ringIdx = 0; ringIdx < polygon.length; ringIdx++) {
         const ring = polygon[ringIdx];
         let d = '';
+        
         for (let i = 0; i < ring.length; i++) {
-          const p = project(ring[i][0], ring[i][1]); // [lng, lat]
-          d += i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`;
+          const lng = ring[i][0];
+          const lat = ring[i][1];
+          const p = project(lng, lat);
+
+          if (i === 0) {
+            d += `M${p.x},${p.y}`;
+          } else {
+            const prevLng = ring[i - 1][0];
+            if (Math.abs(lng - prevLng) > 180) {
+              // Antimeridian crossing! 
+              // Instead of a giant horizontal line that smears, 
+              // we "lift the pen" (MoveTo). This leaves a 1-pixel gap 
+              // at the antimeridian but prevents the globe-wide smear.
+              d += `M${p.x},${p.y}`;
+            } else {
+              d += `L${p.x},${p.y}`;
+            }
+          }
         }
-        if (ring.length > 0) d += 'Z';
+        // Only use Z if we didn't cross the antimeridian in a way that would smear the closure.
+        // For simplicity, we'll just omit Z for now as evenodd fill handles unclosed paths reasonably.
+        // Actually, let's keep Z but the last segment will also be checked.
+        if (ring.length > 1) {
+          const firstLng = ring[0][0];
+          const lastLng = ring[ring.length - 1][0];
+          if (Math.abs(firstLng - lastLng) < 180) {
+            d += 'Z';
+          }
+        }
         
         paths += `<path d="${d}" />\n`;
       }
