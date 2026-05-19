@@ -1353,6 +1353,71 @@
         text-decoration: underline;
       }
 
+      .mobile-navbar {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: linear-gradient(180deg, rgba(28, 16, 15, 0.95) 0%, rgba(13, 9, 10, 0.98) 100%);
+        border-top: 1px solid var(--border-soft);
+        backdrop-filter: blur(20px);
+        z-index: 100;
+        padding: 0 12px;
+        justify-content: space-around;
+        align-items: center;
+        pointer-events: auto;
+      }
+
+      .mobile-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: none;
+        color: #f0c2a5;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        padding: 8px;
+        position: relative;
+        flex: 1;
+        transition: color 0.2s;
+      }
+
+      .mobile-nav-item.active {
+        color: #ff7648;
+      }
+
+      .mobile-nav-icon {
+        font-size: 1.25rem;
+      }
+
+      .mobile-nav-badge {
+        position: absolute;
+        top: 4px;
+        right: calc(50% - 20px);
+        background: #4488ff;
+        color: white;
+        font-size: 0.6rem;
+        min-width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      }
+
+      .mobile-nav-badge.danger {
+        background: #ff5837;
+      }
+
       @media (max-width: 1180px) {
         .topbar {
           width: min(760px, calc(100vw - 420px));
@@ -1368,9 +1433,51 @@
       }
 
       @media (max-width: 980px) {
+        .mobile-navbar {
+          display: flex;
+        }
+
         .topbar {
           right: 12px;
           width: auto;
+          /* Leave room for navbar if collapsed? Actually topbar is at the top. */
+        }
+
+        /* Base panel behavior for mobile tabs */
+        .overlay-news-panel,
+        .overlay-dock {
+          display: none;
+        }
+
+        .mobile-news-active .overlay-news-panel {
+          display: flex;
+          top: 152px; /* Below topbar */
+          left: 12px;
+          right: 12px;
+          bottom: 76px; /* Above navbar */
+          width: auto;
+          height: auto;
+        }
+
+        .mobile-alerts-active .overlay-dock {
+          display: flex;
+          flex-direction: column;
+          top: 152px; /* Below topbar */
+          left: 12px;
+          right: 12px;
+          bottom: 76px; /* Above navbar */
+          width: auto;
+          height: auto;
+          max-height: none;
+        }
+
+        .mobile-alerts-active .overlay-alerts-panel {
+          flex: 1;
+          height: auto;
+          max-height: none;
+          block-size: auto;
+          min-block-size: 0;
+          max-block-size: none;
         }
 
         .topbar-main {
@@ -1412,45 +1519,8 @@
           min-width: 0;
         }
 
-        .overlay-news-panel {
-          top: auto;
-          left: 12px;
-          right: 12px;
-          bottom: 12px;
-          width: auto;
-          height: var(--mobile-news-overlay-height);
-        }
-
-        .overlay-news-panel.collapsed {
-          height: auto;
-        }
-
-        .overlay-dock {
-          left: 12px;
-          right: 12px;
-          width: auto;
-          bottom: calc(var(--mobile-news-overlay-height) + 24px);
-          max-height: calc(100vh - var(--mobile-news-overlay-height) - 190px);
-          overflow-y: auto;
-        }
-
-        .app-shell.news-feed-collapsed .overlay-dock {
-          bottom: 96px;
-          max-height: calc(100vh - 272px);
-        }
-
-        .overlay-alerts-panel {
-          flex-basis: var(--overlay-alerts-panel-height-mobile);
-          block-size: var(--overlay-alerts-panel-height-mobile);
-          min-block-size: var(--overlay-alerts-panel-height-mobile);
-          max-block-size: var(--overlay-alerts-panel-height-mobile);
-        }
-
-        .overlay-alerts-panel.collapsed {
-          flex-basis: auto;
-          block-size: auto;
-          min-block-size: 0;
-          max-block-size: none;
+        .panel-collapse-btn {
+          display: none;
         }
 
         .globe-overlay-toolbar {
@@ -1461,6 +1531,11 @@
           justify-content: center;
           align-items: stretch;
           transform: translateX(-50%);
+        }
+
+        .mobile-news-active .globe-overlay-toolbar,
+        .mobile-alerts-active .globe-overlay-toolbar {
+          display: none;
         }
 
         .globe-toolbar {
@@ -1492,25 +1567,22 @@
         }
 
         .globe-overlay-bottom {
-          bottom: calc(var(--mobile-news-overlay-height) + 12px);
-          max-width: calc(100vw - 32px);
-        }
-
-        .app-shell.news-feed-collapsed .globe-overlay-bottom {
-          bottom: 92px;
+          display: none;
         }
 
         .globe-event-card,
         .globe-event-hint {
           left: 12px;
           right: 12px;
-          bottom: calc(var(--mobile-news-overlay-height) + 24px);
+          bottom: 84px;
           width: auto;
         }
 
-        .app-shell.news-feed-collapsed .globe-event-card,
-        .app-shell.news-feed-collapsed .globe-event-hint {
-          bottom: 104px;
+        .mobile-news-active .globe-event-card,
+        .mobile-alerts-active .globe-event-card,
+        .mobile-news-active .globe-event-hint,
+        .mobile-alerts-active .globe-event-hint {
+          display: none;
         }
       }
 
@@ -1524,6 +1596,20 @@
 
         .topbar.collapsed {
           padding: 10px 12px;
+        }
+
+        .mobile-news-active .overlay-news-panel {
+          top: 146px;
+          left: 10px;
+          right: 10px;
+          bottom: 74px;
+        }
+
+        .mobile-alerts-active .overlay-dock {
+          top: 146px;
+          left: 10px;
+          right: 10px;
+          bottom: 74px;
         }
 
         .title {
@@ -1553,44 +1639,6 @@
           gap: 4px;
         }
 
-        .overlay-news-panel,
-        .overlay-dock {
-          left: 10px;
-          right: 10px;
-        }
-
-        .overlay-news-panel {
-          bottom: 10px;
-        }
-
-        .overlay-news-panel.collapsed {
-          height: auto;
-        }
-
-        .overlay-dock {
-          bottom: calc(var(--mobile-news-overlay-height) + 20px);
-          max-height: calc(100vh - var(--mobile-news-overlay-height) - 176px);
-        }
-
-        .app-shell.news-feed-collapsed .overlay-dock {
-          bottom: 88px;
-          max-height: calc(100vh - 248px);
-        }
-
-        .overlay-alerts-panel {
-          flex-basis: var(--overlay-alerts-panel-height-mobile);
-          block-size: var(--overlay-alerts-panel-height-mobile);
-          min-block-size: var(--overlay-alerts-panel-height-mobile);
-          max-block-size: var(--overlay-alerts-panel-height-mobile);
-        }
-
-        .overlay-alerts-panel.collapsed {
-          flex-basis: auto;
-          block-size: auto;
-          min-block-size: 0;
-          max-block-size: none;
-        }
-
         .globe-toolbar {
           max-width: calc(100vw - 20px);
           justify-content: space-between;
@@ -1608,12 +1656,7 @@
         .globe-event-hint {
           left: 10px;
           right: 10px;
-          bottom: calc(var(--mobile-news-overlay-height) + 20px);
-        }
-
-        .app-shell.news-feed-collapsed .globe-event-card,
-        .app-shell.news-feed-collapsed .globe-event-hint {
-          bottom: 98px;
+          bottom: 82px;
         }
       }
 
