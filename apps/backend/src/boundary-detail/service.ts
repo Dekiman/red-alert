@@ -135,9 +135,16 @@ function getRequestedNameCandidates(countryName: string) {
   }
 
   candidates.add(normalized);
-  for (const alias of COUNTRY_NAME_ALIASES[normalized] ?? []) {
-    candidates.add(alias);
+  
+  // Bidirectional alias lookup
+  for (const [key, aliases] of Object.entries(COUNTRY_NAME_ALIASES)) {
+    if (key === normalized) {
+      for (const alias of aliases) candidates.add(alias);
+    } else if (aliases.includes(normalized)) {
+      candidates.add(key);
+    }
   }
+
   return candidates;
 }
 

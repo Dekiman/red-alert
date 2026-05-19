@@ -54,9 +54,9 @@ async function run() {
         let topology = topojson.topology({ boundaries: geojson });
         
         console.log(`⚖️ Simplifying ${countryIso} ${level}...`);
-        // Simplify to 10% of the original precision (adjustable)
+        // Aggressively simplify for the globe view to keep file sizes manageable
         topology = toposimplify.presimplify(topology);
-        topology = toposimplify.simplify(topology, 0.0001); // Threshold for simplification
+        topology = toposimplify.simplify(topology, 0.005); 
         
         writeFileSync(outputPath, JSON.stringify(topology));
         manifest[`${countryIso}-${level}`] = `/boundaries/${filename}`;

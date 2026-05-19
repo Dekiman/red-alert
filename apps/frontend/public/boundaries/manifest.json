@@ -1,0 +1,22 @@
+{
+  "FRA-ADM1": "/boundaries/fra-adm1.topo.json",
+  "FRA-ADM2": "/boundaries/fra-adm2.topo.json",
+  "DEU-ADM1": "/boundaries/deu-adm1.topo.json",
+  "DEU-ADM2": "/boundaries/deu-adm2.topo.json",
+  "ISR-ADM1": "/boundaries/isr-adm1.topo.json",
+  "ISR-ADM2": "/boundaries/isr-adm2.topo.json",
+  "USA-ADM1": "/boundaries/usa-adm1.topo.json",
+  "USA-ADM2": "/boundaries/usa-adm2.topo.json",
+  "GBR-ADM1": "/boundaries/gbr-adm1.topo.json",
+  "GBR-ADM2": "/boundaries/gbr-adm2.topo.json",
+  "ITA-ADM1": "/boundaries/ita-adm1.topo.json",
+  "ITA-ADM2": "/boundaries/ita-adm2.topo.json",
+  "ESP-ADM1": "/boundaries/esp-adm1.topo.json",
+  "ESP-ADM2": "/boundaries/esp-adm2.topo.json",
+  "CAN-ADM1": "/boundaries/can-adm1.topo.json",
+  "CAN-ADM2": "/boundaries/can-adm2.topo.json",
+  "AUS-ADM1": "/boundaries/aus-adm1.topo.json",
+  "AUS-ADM2": "/boundaries/aus-adm2.topo.json",
+  "JPN-ADM1": "/boundaries/jpn-adm1.topo.json",
+  "JPN-ADM2": "/boundaries/jpn-adm2.topo.json"
+}

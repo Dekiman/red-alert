@@ -14,5 +14,5 @@ wrangler.toml.local
 memory/
 *.md.tmp
 
-# Public build artifacts
-apps/frontend/public/boundaries/
+# Public build artifacts (manually allowed for geoboundaries)
+# apps/frontend/public/boundaries/
