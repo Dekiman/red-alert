@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Color, Vector3, AdditiveBlending, BackSide, MathUtils, LineBasicMaterial, Quaternion } from "three";
 import { latLngToVector3, vector3ToLatLng, wrapLongitude, isPointInPolygon, getSubsolarPoint, getSublunarPoint, getRealTimeEarthRotation } from "./math";
-import { OrbitControls, Stars } from "@react-three/drei";
+import { OrbitControls, Stars, useTexture } from "@react-three/drei";
 import * as topojson from "topojson-client";
 
 /**
@@ -84,8 +84,10 @@ export function SunHighlight({ sunDirection = [1, 0.2, 0.5], radius = 1.2 }: { s
         }}
         vertexShader={`
           varying vec3 vSurfaceNormal;
+          varying vec3 vWorldNormal;
           void main() {
             vSurfaceNormal = normalize(normal);
+            vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
         `}
@@ -95,9 +97,11 @@ export function SunHighlight({ sunDirection = [1, 0.2, 0.5], radius = 1.2 }: { s
           uniform vec3 twilightColor;
           uniform float highlightStrength;
           varying vec3 vSurfaceNormal;
+          varying vec3 vWorldNormal;
 
           void main() {
-            float sunAmount = dot(normalize(vSurfaceNormal), normalize(sunDirection));
+            // Use world-space normal for sun calculation so it doesn't rotate with the earth
+            float sunAmount = dot(normalize(vWorldNormal), normalize(sunDirection));
             float alpha = (max(sunAmount, 0.0) * 0.16 + pow(max(sunAmount, 0.0), 2.5) * 0.08) * highlightStrength;
             if (alpha <= 0.001) discard;
             vec3 color = mix(twilightColor, highlightColor, smoothstep(-0.02, 0.32, sunAmount));
@@ -147,24 +151,40 @@ export function MoonMarker({ date = new Date(), orbitRadius = 5 }: { date?: Date
  * Globe Component
  */
 export function Globe(props: any) {
-  const { radius = 1.2, children } = props;
+  const { radius = 1.2, date = new Date(), children } = props;
   const globeGroupRef = useRef<any>(null);
+
+  const landMask = useTexture("/assets/land-mask.svg");
 
   useFrame(() => {
     if (globeGroupRef.current) {
-      globeGroupRef.current.rotation.y = getRealTimeEarthRotation(new Date());
+      globeGroupRef.current.rotation.y = getRealTimeEarthRotation(date);
     }
   });
 
   return (
     <group ref={globeGroupRef}>
+      {/* Water Sphere */}
       <mesh>
         <sphereGeometry args={[radius, 112, 112]} />
         <meshStandardMaterial
-          color="#122739"
-          emissive="#09131c"
-          roughness={0.7}
-          metalness={0.2}
+          color="#0f1e2c"
+          emissive="#060c12"
+          roughness={0.4}
+          metalness={0.8}
+        />
+      </mesh>
+      {/* Land Sphere - Adjusted to align with borders and user request */}
+      <mesh rotation={[0, Math.PI + MathUtils.degToRad(90), 0]}>
+        <sphereGeometry args={[radius + 0.001, 112, 112]} />
+        <meshStandardMaterial
+          color="#1c3b5a"
+          emissive="#0c1825"
+          roughness={0.9}
+          metalness={0.1}
+          alphaMap={landMask}
+          transparent={true}
+          alphaTest={0.5}
         />
       </mesh>
       <mesh>
@@ -483,8 +503,9 @@ export function AutoGeoBoundaryLayer(props: {
   color?: string;
   opacity?: number;
   onHover?: (country: string | null) => void;
+  date?: Date;
 }) {
-  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6, onHover } = props;
+  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6, onHover, date = new Date() } = props;
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const [topology, setTopology] = useState<any>(null);
 
@@ -514,7 +535,7 @@ export function AutoGeoBoundaryLayer(props: {
 
     // Get the lat/lng of the intersection point
     // We need to account for globe rotation
-    const rotationY = getRealTimeEarthRotation(new Date());
+    const rotationY = getRealTimeEarthRotation(date);
     const hitLatLng = vector3ToLatLng(e.point);
 
     // local_lng = world_lng - rotation_y

@@ -7,9 +7,10 @@ const DashboardMap = lazy(() => import("./map-kernel/renderer").then(m => ({ def
 interface AlertMapPanelProps {
   newsEvents: NewsEventPayload[];
   alerts: AlertPayload[];
+  date?: Date;
 }
 
-export function AlertMapPanel({ newsEvents, alerts }: AlertMapPanelProps) {
+export function AlertMapPanel({ newsEvents, alerts, date }: AlertMapPanelProps) {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   const handleSelect = (item: { kind: "news" | "alert"; id: string; payload: any }) => {
@@ -61,6 +62,7 @@ export function AlertMapPanel({ newsEvents, alerts }: AlertMapPanelProps) {
             selectedEventId={selectedItem?.kind === "news" ? selectedItem.newsEvent?.eventId : null}
             selectedCountry={selectedCountry}
             onSelect={handleSelect}
+            date={date}
           />
         </Suspense>
         

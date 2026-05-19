@@ -209,10 +209,12 @@ type GeoBoundariesMetadata = {
 type BoundaryDetailQuery = {
   countryName: string;
   level: string;
+  ctx?: { waitUntil: (promise: Promise<any>) => void };
 };
 
 export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; logger?: any }) {
   let metadataPromise: Promise<GeoBoundariesMetadata[]> | null = null;
+  let countryLookupPromise: Promise<Map<string, string>> | null = null;
   const detailCache = new Map<string, Promise<any | null>>();
 
   async function getMetadataEntries() {
@@ -256,9 +258,18 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
     return metadataPromise;
   }
 
+  async function getCountryLookup() {
+    if (!countryLookupPromise) {
+      countryLookupPromise = getMetadataEntries().then((entries) => createGeoBoundariesCountryLookup(entries));
+    }
+    return countryLookupPromise;
+  }
+
   async function resolveMetadata(countryName: string, level: string) {
-    const metadataEntries = await getMetadataEntries();
-    const countryLookup = createGeoBoundariesCountryLookup(metadataEntries);
+    const [metadataEntries, countryLookup] = await Promise.all([
+      getMetadataEntries(),
+      getCountryLookup()
+    ]);
     const requestedCandidates = getRequestedNameCandidates(countryName);
     let boundaryISO: string | null = null;
 
@@ -280,7 +291,7 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
     );
   }
 
-  async function getBoundaryDetail({ countryName, level }: BoundaryDetailQuery) {
+  async function getBoundaryDetail({ countryName, level, ctx }: BoundaryDetailQuery) {
     const normalizedLevel = String(level ?? "").toUpperCase();
     const requestedCountryName = String(countryName ?? "").trim();
     if (!requestedCountryName || !SUPPORTED_LEVELS.has(normalizedLevel)) {
@@ -291,6 +302,13 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
       requestedCountryName,
       normalizedLevel
     );
+
+    const writeSnapshot = (key: string, payload: any) => {
+      const promise = writeBoundarySnapshot(kv, key, payload, logger);
+      if (ctx?.waitUntil) {
+        ctx.waitUntil(promise);
+      }
+    };
 
     // Try KV snapshot first for immediate response
     const cached = await readBoundarySnapshot(kv, requestSnapshotKey, logger);
@@ -363,10 +381,13 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
               level: normalizedLevel,
               featureCollection: geojson
             };
-            await writeBoundarySnapshot(kv, requestSnapshotKey, payload, logger);
+            
+            // Non-blocking writes
+            writeSnapshot(requestSnapshotKey, payload);
             if (matchedSnapshotKey !== requestSnapshotKey) {
-              await writeBoundarySnapshot(kv, matchedSnapshotKey, payload, logger);
+              writeSnapshot(matchedSnapshotKey, payload);
             }
+            
             return payload;
           })
           .catch(async (error) => {
@@ -384,12 +405,12 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
     }
 
     const payload = await detailCache.get(cacheKey)!;
+    
+    // Ensure the current request's key is also cached if it was an alias and we just got a hit from the promise
     if (payload && (payload as any).source !== "geoBoundaries_snapshot") {
-      await writeBoundarySnapshot(kv, requestSnapshotKey, payload, logger);
-      if (matchedSnapshotKey !== requestSnapshotKey) {
-        await writeBoundarySnapshot(kv, matchedSnapshotKey, payload, logger);
-      }
+      writeSnapshot(requestSnapshotKey, payload);
     }
+    
     return payload;
   }
 

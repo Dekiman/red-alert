@@ -248,7 +248,11 @@ const api = new Hono<{ Bindings: Env }>()
       });
     }
 
-    const payload = await boundaryDetailService.getBoundaryDetail({ countryName, level });
+    const payload = await boundaryDetailService.getBoundaryDetail({
+      countryName,
+      level,
+      ctx: c.executionCtx
+    });
 
     if (!payload) {
       c.header("Cache-Control", "no-store");

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import * as THREE from "three";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { 
   Globe, 
   Marker3D, 
@@ -14,6 +14,7 @@ import {
   SunMarker,
   MoonMarker
 } from "./components";
+import { getSubsolarPoint, latLngToVector3 } from "./math";
 import type { AlertPayload, NewsEventPayload } from "../contracts";
 
 export interface DashboardMapProps {
@@ -21,13 +22,25 @@ export interface DashboardMapProps {
   newsEvents: NewsEventPayload[];
   selectedEventId?: string | null;
   selectedCountry?: string | null;
+  date?: Date;
   onSelect?: (item: { kind: "news" | "alert"; id: string; payload: any }) => void;
 }
 
-const SUN_DIRECTION: [number, number, number] = [1, 0.2, 0.5];
+/**
+ * Syncs the sun light and highlight with the actual calculated sun position
+ */
+function SunSynchronizer({ onSunDirChange, date = new Date() }: { onSunDirChange: (dir: [number, number, number]) => void, date?: Date }) {
+  useFrame(() => {
+    const { lat, lng } = getSubsolarPoint(date);
+    const pos = latLngToVector3(lat, lng, 1);
+    onSunDirChange([pos.x, pos.y, pos.z]);
+  });
+  return null;
+}
 
-export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, onSelect }: DashboardMapProps) {
+export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, date = new Date(), onSelect }: DashboardMapProps) {
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
+  const [sunDirection, setSunDirection] = useState<[number, number, number]>([1, 0.2, 0.5]);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const cameraProps = useMemo(() => ({ 
@@ -59,13 +72,15 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
         <Starfield />
         <ambientLight intensity={0.4} />
         <directionalLight 
-          position={SUN_DIRECTION} 
+          position={sunDirection} 
           intensity={1.2} 
           castShadow 
         />
         
-        <Globe radius={1.2}>
-          <SunHighlight radius={1.2} sunDirection={SUN_DIRECTION} />
+        <SunSynchronizer onSunDirChange={setSunDirection} date={date} />
+
+        <Globe radius={1.2} date={date}>
+          <SunHighlight radius={1.2} sunDirection={sunDirection} />
           
           <BoundaryLayer 
             url="/assets/world-countries-50m.json" 
@@ -83,6 +98,7 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
             altitude={0.007} 
             opacity={0.8}
             onHover={setHoveredCountry}
+            date={date}
           />
           
           <group name="newsMarkers">
@@ -121,8 +137,8 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
           </group>
         </Globe>
 
-        <SunMarker orbitRadius={6} />
-        <MoonMarker orbitRadius={5} />
+        <SunMarker orbitRadius={6} date={date} />
+        <MoonMarker orbitRadius={5} date={date} />
         
         <AdaptiveOrbitControls />
       </Canvas>
