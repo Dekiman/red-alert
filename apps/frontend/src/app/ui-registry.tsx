@@ -5,9 +5,11 @@ import { uiCatalog } from "./ui-catalog";
 import { formatTime, formatNewsTime, hasHebrew } from "./text-utils";
 import { categorizeNewsTitleType } from "./news-categorizer";
 
+import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
+
 export const { registry } = defineRegistry(uiCatalog, {
   components: {
-    // Standard shadcn implementations
+    // Standard shadcn implementations for the Renderer
     Card: shadcnComponents.Card,
     Stack: shadcnComponents.Stack,
     Text: shadcnComponents.Text,
@@ -16,73 +18,64 @@ export const { registry } = defineRegistry(uiCatalog, {
     Button: shadcnComponents.Button,
     Heading: shadcnComponents.Heading,
 
-    // Custom implementations
+    // Custom implementations using local React components and Tailwind
     AlertCard: ({ props }) => {
       const { notificationId, source, threat, isDrill, locations, locationCount, alertTimestampIso } = props;
       const hasHebrewLocation = locations.some((value) => hasHebrew(value));
       const direction = hasHebrewLocation ? "rtl" : "ltr";
 
       return (
-        <shadcnComponents.Card className="alert-card overflow-hidden transition-all hover:border-red-500/50">
-          <shadcnComponents.Stack direction="vertical" gap={3} className="p-4">
-            <shadcnComponents.Stack direction="horizontal" justify="between" align="center">
-              <shadcnComponents.Heading level={4} className="text-sm font-bold text-red-500">
+        <Card className="alert-card overflow-hidden transition-all hover:border-red-500/50 p-0">
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-sm font-bold text-red-500">
                 {locationCount} location{locationCount === 1 ? "" : "s"}
-              </shadcnComponents.Heading>
-              <shadcnComponents.Text variant="muted" className="text-xs">
+              </h4>
+              <span className="text-xs text-muted-foreground">
                 {formatTime(alertTimestampIso)}
-              </shadcnComponents.Text>
-            </shadcnComponents.Stack>
+              </span>
+            </div>
 
-            <shadcnComponents.Stack direction="horizontal" gap={2} className="flex-wrap">
-              <shadcnComponents.Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-red-500/10 text-red-400 border-red-500/30">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent text-[10px] uppercase tracking-wider bg-red-500/10 text-red-400 border-red-500/30">
                 🚨 {source}
-              </shadcnComponents.Badge>
-              <shadcnComponents.Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
+              </span>
+              <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80 text-[10px] uppercase tracking-wider">
                 Threat: {threat}
-              </shadcnComponents.Badge>
+              </span>
               {isDrill && (
-                <shadcnComponents.Badge variant="destructive" className="text-[10px] uppercase tracking-wider">
+                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80 text-[10px] uppercase tracking-wider">
                   DRILL
-                </shadcnComponents.Badge>
+                </span>
               )}
-            </shadcnComponents.Stack>
+            </div>
 
-            <shadcnComponents.Separator className="opacity-10" />
+            <div className="h-px w-full bg-foreground/10 opacity-10" />
 
-            <shadcnComponents.Stack 
-              direction="vertical" 
-              gap={1} 
-              className={direction === "rtl" ? "text-right font-hebrew" : "text-left"}
-            >
+            <div className={`flex flex-col gap-1 ${direction === "rtl" ? "text-right font-hebrew" : "text-left"}`}>
               {locations.map((locationText, index) => (
-                <shadcnComponents.Text 
+                <p 
                   key={`${notificationId}-${locationText}-${index}`}
-                  variant="body"
                   className="text-sm leading-tight text-slate-200"
                 >
                   {locationText}
-                </shadcnComponents.Text>
+                </p>
               ))}
-            </shadcnComponents.Stack>
+            </div>
 
-            <shadcnComponents.Text variant="muted" className="text-[10px] opacity-50">
+            <span className="text-[10px] text-muted-foreground opacity-50">
               ID: {notificationId}
-            </shadcnComponents.Text>
-          </shadcnComponents.Stack>
-        </shadcnComponents.Card>
+            </span>
+          </div>
+        </Card>
       );
     },
 
     NewsCard: ({ props }) => {
       const newsEvent = props;
-      const sourceTypes = Array.isArray(newsEvent.sourceTypes)
-        ? newsEvent.sourceTypes.join(", ")
-        : "";
       const titleType = categorizeNewsTitleType(newsEvent as any);
       const titleText = newsEvent.title || "Untitled news event";
       const titleDir = hasHebrew(titleText) ? "rtl" : "ltr";
-      const titleLang = hasHebrew(titleText) ? "he" : "en";
 
       const summaryText =
         newsEvent.summary && newsEvent.summary !== newsEvent.title ? String(newsEvent.summary) : null;
@@ -90,95 +83,91 @@ export const { registry } = defineRegistry(uiCatalog, {
       const locationParts = [newsEvent.locationName, newsEvent.region, newsEvent.country].filter(Boolean);
       const locationText = locationParts.length > 0 ? locationParts.join(" | ") : null;
       
-      const severityColor = newsEvent.severity && newsEvent.severity >= 4 ? "text-red-400" : "text-emerald-400";
-      const badgeVariant = newsEvent.severity && newsEvent.severity >= 4 ? "destructive" : "secondary";
+      const badgeClass = newsEvent.severity && newsEvent.severity >= 4 
+        ? "bg-destructive text-destructive-foreground hover:bg-destructive/80" 
+        : "bg-secondary text-secondary-foreground hover:bg-secondary/80";
 
       return (
-        <shadcnComponents.Card className="news-card overflow-hidden transition-all hover:border-emerald-500/50">
-          <shadcnComponents.Stack direction="vertical" gap={3} className="p-4">
-            <shadcnComponents.Stack direction="horizontal" justify="between" align="center">
-              <shadcnComponents.Text variant="lead" className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">
+        <Card className="news-card overflow-hidden transition-all hover:border-emerald-500/50 p-0">
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">
                 {(newsEvent.category || "news").toUpperCase()}
-              </shadcnComponents.Text>
-              <shadcnComponents.Text variant="muted" className="text-xs">
+              </span>
+              <span className="text-xs text-muted-foreground">
                 {formatNewsTime(newsEvent.updatedAtIso || newsEvent.createdAtIso)}
-              </shadcnComponents.Text>
-            </shadcnComponents.Stack>
+              </span>
+            </div>
 
-            <shadcnComponents.Stack direction="vertical" gap={1}>
+            <div className="flex flex-col gap-1">
               {newsEvent.primarySignalUrl ? (
-                <shadcnComponents.Link 
+                <a 
                   href={newsEvent.primarySignalUrl}
-                  className={`text-sm font-semibold leading-tight hover:underline ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`text-sm font-semibold leading-tight text-foreground hover:underline ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"}`}
                 >
                   {titleText}
-                </shadcnComponents.Link>
+                </a>
               ) : (
-                <shadcnComponents.Text 
-                  variant="body" 
-                  className={`text-sm font-semibold leading-tight ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"}`}
-                >
+                <p className={`text-sm font-semibold leading-tight text-foreground ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"}`}>
                   {titleText}
-                </shadcnComponents.Text>
+                </p>
               )}
 
               {locationText && (
-                <shadcnComponents.Text 
-                  variant="muted" 
-                  className={`text-[10px] italic ${hasHebrew(locationText) ? "text-right font-hebrew" : "text-left"}`}
-                >
+                <p className={`text-[10px] italic text-muted-foreground ${hasHebrew(locationText) ? "text-right font-hebrew" : "text-left"}`}>
                   {locationText}
-                </shadcnComponents.Text>
+                </p>
               )}
-            </shadcnComponents.Stack>
+            </div>
 
             {summaryText && (
-              <shadcnComponents.Text 
-                variant="body" 
-                className={`text-xs text-slate-400 line-clamp-3 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"}`}
-              >
+              <p className={`text-xs text-slate-400 line-clamp-3 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"}`}>
                 {summaryText}
-              </shadcnComponents.Text>
+              </p>
             )}
 
-            <shadcnComponents.Stack direction="horizontal" gap={2} className="flex-wrap pt-1">
-              <shadcnComponents.Badge variant="outline" className="text-[9px] uppercase tracking-tighter">
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-tighter border-muted-foreground/20 text-muted-foreground">
                 {titleType}
-              </shadcnComponents.Badge>
-              <shadcnComponents.Badge variant={badgeVariant} className="text-[9px] uppercase tracking-tighter">
+              </span>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] uppercase tracking-tighter ${badgeClass}`}>
                 Sev: {newsEvent.severity ?? "n/a"}
-              </shadcnComponents.Badge>
-              <shadcnComponents.Badge variant="secondary" className="text-[9px] uppercase tracking-tighter">
+              </span>
+              <span className="inline-flex items-center rounded-full bg-secondary text-secondary-foreground px-2 py-0.5 text-[9px] uppercase tracking-tighter">
                 Signals: {newsEvent.signalCount ?? 0}
-              </shadcnComponents.Badge>
-            </shadcnComponents.Stack>
+              </span>
+            </div>
 
             {newsEvent.primarySignalUrl && (
-              <shadcnComponents.Stack direction="horizontal" justify="end">
-                <shadcnComponents.Link 
+              <div className="flex justify-end">
+                <a 
                   href={newsEvent.primarySignalUrl}
+                  target="_blank"
+                  rel="noreferrer"
                   className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors uppercase font-bold tracking-wider"
                 >
                   Source: {newsEvent.primarySourceName || "news"} →
-                </shadcnComponents.Link>
-              </shadcnComponents.Stack>
+                </a>
+              </div>
             )}
-          </shadcnComponents.Stack>
-        </shadcnComponents.Card>
+          </div>
+        </Card>
       );
     },
 
     Metric: ({ props }) => {
       const { label, value } = props;
       return (
-        <shadcnComponents.Stack direction="horizontal" gap={2} align="center" justify="between" className="metric border-b border-white/5 pb-1">
-          <shadcnComponents.Text variant="muted" className="text-[10px] uppercase tracking-wider">
+        <div className="flex justify-between items-center gap-2 border-b border-white/5 pb-1 metric">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {label}:
-          </shadcnComponents.Text>
-          <shadcnComponents.Text variant="body" className="text-xs font-mono font-bold text-slate-100">
+          </span>
+          <span className="text-xs font-mono font-bold text-slate-100">
             {String(value)}
-          </shadcnComponents.Text>
-        </shadcnComponents.Stack>
+          </span>
+        </div>
       );
     }
   },
