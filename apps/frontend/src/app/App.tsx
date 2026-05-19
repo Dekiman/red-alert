@@ -19,7 +19,7 @@ import { getUiSocketPath } from "./ui-config.js";
 import { useDashboardSocket } from "./use-dashboard-socket.js";
 import { useDashboardStore } from "../stores/useDashboardStore.js";
 import { LiveClockValue } from "./live-clock-value.js";
-import { TimelineReplayCard, type ReplayTimelineState } from "./timeline-replay-card.js";
+import { TimelineReplayCard, type ReplayStatePayload as ReplayTimelineState } from "./timeline-replay-card.js";
 import { Globe, Newspaper, Bell } from "lucide-react";
 
 const LIVE_NEWS_FEED_API_URL = "/api/live-news";
@@ -419,6 +419,8 @@ export function App() {
   const uiClients = useDashboardStore((s) => s.uiClients);
   const bufferedAlerts = useDashboardStore((s) => s.bufferedAlerts);
   const bufferedNewsEvents = useDashboardStore((s) => s.bufferedNewsEvents);
+  const selectedCountry = useDashboardStore((s) => s.selectedCountry);
+  const setSelectedCountry = useDashboardStore((s) => s.setSelectedCountry);
 
   const [isTimelineReplayActive, setIsTimelineReplayActive] = useState(false);
   const [replayTimelineState, setReplayTimelineState] = useState<ReplayTimelineState>(DEFAULT_REPLAY_TIMELINE_STATE);
@@ -531,11 +533,17 @@ export function App() {
   }, [replayAlertEvents, replayCursorUnix, replayAlertWindowMinutes]);
   const visibleAlerts = isReplaySessionActive ? replayVisibleAlerts : storeAlerts;
   // Keep the feed, filter counts, and globe markers on the same time window.
-  const sourceNewsEventsForFilters = isReplaySessionActive
+  const rawSourceNewsEvents = isReplaySessionActive
     ? isReplayFeedMode
       ? replayWindowNewsEvents
       : []
     : liveWindowNewsEvents;
+
+  const sourceNewsEventsForFilters = useMemo(() => {
+    if (!selectedCountry) return rawSourceNewsEvents;
+    return rawSourceNewsEvents.filter((newsEvent) => newsEvent.country === selectedCountry);
+  }, [rawSourceNewsEvents, selectedCountry]);
+
   const matchingNewsEvents = useMemo(
     () =>
       sourceNewsEventsForFilters.filter(
@@ -801,7 +809,13 @@ export function App() {
   return (
     <main className={`app-shell mobile-${mobileTab}-active${isNewsFeedCollapsed ? " news-feed-collapsed" : ""}`}>
       <Suspense fallback={<div className="map-placeholder" />}>
-        <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} date={customMapDate} />
+        <AlertMapPanel 
+          newsEvents={globeNewsEvents} 
+          alerts={visibleAlerts} 
+          date={customMapDate} 
+          selectedCountry={selectedCountry}
+          onSelectCountry={setSelectedCountry}
+        />
       </Suspense>
 
       <div className="interface-overlay">
@@ -900,6 +914,19 @@ export function App() {
             <div className="overlay-panel-heading">
               <p className="overlay-panel-kicker">Global stream</p>
               <h2 className="panel-title">Live News Feed</h2>
+              {selectedCountry && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider border border-blue-500/30">
+                    {selectedCountry}
+                  </span>
+                  <button 
+                    onClick={() => setSelectedCountry(null)}
+                    className="text-[10px] text-muted-foreground hover:text-white transition-colors underline decoration-dotted"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              )}
               <p className="overlay-panel-submeta">
                 {!hasActiveNewsFilters
                   ? `${filteredNewsEvents.length} most recent shown`

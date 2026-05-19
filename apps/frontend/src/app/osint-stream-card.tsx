@@ -153,7 +153,7 @@ export function OsintStreamCard({ connectionState, updatedAt, newsEvents }: Osin
             {latestEvent && latestTitle ? (
               <div className="p-2 rounded bg-white/[0.03] border border-white/5 flex flex-col gap-1.5">
                 <p
-                  className={`text-[12px] font-bold leading-snug text-slate-200 ${latestTitleHasHebrew ? "text-right font-hebrew" : "text-left"} text-pretty line-clamp-2`}
+                  className={`text-[12px] font-bold leading-snug text-slate-200 ${latestTitleHasHebrew ? "text-right font-hebrew" : "text-left"} text-pretty`}
                 >
                   {latestTitle}
                 </p>

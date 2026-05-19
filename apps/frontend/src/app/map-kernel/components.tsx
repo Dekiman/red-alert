@@ -503,9 +503,20 @@ export function AutoGeoBoundaryLayer(props: {
   color?: string;
   opacity?: number;
   onHover?: (country: string | null) => void;
+  onSelect?: (country: string | null) => void;
+  selectedCountry?: string | null;
   date?: Date;
 }) {
-  const { radius = 1.2, altitude = 0.012, color = "#88ccff", opacity = 0.6, onHover, date = new Date() } = props;
+  const { 
+    radius = 1.2, 
+    altitude = 0.012, 
+    color = "#88ccff", 
+    opacity = 0.6, 
+    onHover, 
+    onSelect,
+    selectedCountry,
+    date = new Date() 
+  } = props;
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const [topology, setTopology] = useState<any>(null);
 
@@ -574,6 +585,13 @@ export function AutoGeoBoundaryLayer(props: {
     }
   };
 
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    if (activeCountry) {
+      onSelect?.(activeCountry);
+    }
+  };
+
   const handlePointerOut = () => {
     setActiveCountry(null);
     onHover?.(null);
@@ -584,13 +602,14 @@ export function AutoGeoBoundaryLayer(props: {
       {/* Invisible raycasting mesh */}
       <mesh 
         onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerDown}
         onPointerOut={handlePointerOut}
       >
         <sphereGeometry args={[radius, 64, 64]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      {activeCountry && (
+      {activeCountry && activeCountry !== selectedCountry && (
         <GeoBoundaryLayer 
           countryName={activeCountry} 
           level="ADM2" 
@@ -598,6 +617,17 @@ export function AutoGeoBoundaryLayer(props: {
           altitude={altitude} 
           color={color} 
           opacity={opacity}
+        />
+      )}
+
+      {selectedCountry && (
+        <GeoBoundaryLayer 
+          countryName={selectedCountry} 
+          level="ADM2" 
+          radius={radius} 
+          altitude={altitude + 0.001}
+          color="#ff7648"
+          opacity={1.0}
         />
       )}
     </group>

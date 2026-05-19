@@ -8,9 +8,11 @@ interface AlertMapPanelProps {
   newsEvents: NewsEventPayload[];
   alerts: AlertPayload[];
   date?: Date;
+  selectedCountry?: string | null;
+  onSelectCountry?: (country: string | null) => void;
 }
 
-export function AlertMapPanel({ newsEvents, alerts, date }: AlertMapPanelProps) {
+export function AlertMapPanel({ newsEvents, alerts, date, selectedCountry: globalSelectedCountry, onSelectCountry }: AlertMapPanelProps) {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   const handleSelect = (item: { kind: "news" | "alert"; id: string; payload: any }) => {
@@ -25,7 +27,8 @@ export function AlertMapPanel({ newsEvents, alerts, date }: AlertMapPanelProps) 
   const selectedNewsEvent = selectedItem?.kind === "news" ? selectedItem.newsEvent : null;
   const selectedAlert = selectedItem?.kind === "alert" ? selectedItem.alert : null;
 
-  const selectedCountry = selectedNewsEvent?.country || (selectedAlert ? "Israel" : null);
+  const eventSelectedCountry = selectedNewsEvent?.country || (selectedAlert ? "Israel" : null);
+  const effectiveSelectedCountry = globalSelectedCountry || eventSelectedCountry;
 
   const selectedTitle =
     selectedItem?.kind === "news"
@@ -60,8 +63,9 @@ export function AlertMapPanel({ newsEvents, alerts, date }: AlertMapPanelProps) 
             alerts={alerts} 
             newsEvents={newsEvents} 
             selectedEventId={selectedItem?.kind === "news" ? selectedItem.newsEvent?.eventId : null}
-            selectedCountry={selectedCountry}
+            selectedCountry={effectiveSelectedCountry}
             onSelect={handleSelect}
+            onSelectCountry={onSelectCountry}
             date={date}
           />
         </Suspense>
@@ -78,7 +82,7 @@ export function AlertMapPanel({ newsEvents, alerts, date }: AlertMapPanelProps) 
         </div>
         
         {selectedItem && (
-          <aside className="globe-event-card" aria-label="Selected world event">
+          <aside className="globe-event-card min-h-[140px]" aria-label="Selected world event">
             <button
               type="button"
               className="globe-event-close"

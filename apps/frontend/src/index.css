@@ -19,9 +19,9 @@
         --warn: #f59e0b;
         --danger: #ef4444;
         --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        --mobile-news-overlay-height: min(42vh, 340px);
-        --overlay-alerts-panel-height: min(38vh, 360px);
-        --overlay-alerts-panel-height-mobile: min(34vh, 300px);
+        --mobile-news-overlay-height: min(80vh, 800px);
+        --overlay-alerts-panel-height: min(70vh, 700px);
+        --overlay-alerts-panel-height-mobile: min(60vh, 500px);
         --background: #0a0a0a;
         --foreground: #ededed;
         --card: #171717;
@@ -57,6 +57,26 @@
 
       * {
         box-sizing: border-box;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+      }
+
+      *::-webkit-scrollbar {
+        width: 5px;
+        height: 5px;
+      }
+
+      *::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      *::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+      }
+
+      *::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.2);
       }
 
       body {
@@ -611,17 +631,17 @@
         position: relative;
         display: flex;
         flex-direction: column;
-        flex: 0 0 var(--overlay-alerts-panel-height);
+        max-height: var(--overlay-alerts-panel-height);
         overflow: hidden;
       }
 
       .overlay-alerts-panel.collapsed {
-        flex: 0 0 auto;
+        max-height: none;
+        height: auto;
       }
 
       .overlay-alerts-panel .overlay-feed {
-        flex: 1 1 auto;
-        min-height: 0;
+        overflow-y: auto;
       }
 
       .overlay-feed {
