@@ -25,7 +25,7 @@ export const { registry } = defineRegistry(uiCatalog, {
       const direction = hasHebrewLocation ? "rtl" : "ltr";
 
       return (
-        <Card className="alert-card overflow-hidden transition-all hover:border-red-500/50 p-0">
+        <Card className="card alert-card bg-transparent ring-0 overflow-hidden transition-all hover:border-red-500/50 p-0">
           <div className="flex flex-col gap-3 p-4">
             <div className="flex justify-between items-center">
               <h4 className="text-sm font-bold text-red-500">
@@ -88,7 +88,7 @@ export const { registry } = defineRegistry(uiCatalog, {
         : "bg-secondary text-secondary-foreground hover:bg-secondary/80";
 
       return (
-        <Card className="news-card overflow-hidden transition-all hover:border-emerald-500/50 p-0">
+        <Card className="card news-card bg-transparent ring-0 overflow-hidden transition-all hover:border-emerald-500/50 p-0">
           <div className="flex flex-col gap-3 p-4">
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">
