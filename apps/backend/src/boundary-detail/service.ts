@@ -74,8 +74,11 @@ function getMetadataNameCandidates(boundaryName: string) {
   }
 
   candidates.add(normalized);
+  candidates.add(normalized.replace(/\s+/g, ""));
+
   if (normalized.startsWith("the ")) {
     candidates.add(normalized.slice(4));
+    candidates.add(normalized.slice(4).replace(/\s+/g, ""));
   }
 
   const prefixPatterns = [
@@ -140,6 +143,8 @@ function getRequestedNameCandidates(countryName: string) {
 
 function createGeoBoundariesCountryLookup(metadataEntries: GeoBoundariesMetadata[]) {
   const lookup = new Map<string, string>();
+  
+  // First pass: ADM0 (preferred)
   for (const entry of metadataEntries) {
     if (entry.boundaryType !== "ADM0") {
       continue;
@@ -150,6 +155,19 @@ function createGeoBoundariesCountryLookup(metadataEntries: GeoBoundariesMetadata
       }
     }
   }
+
+  // Second pass: ADM1 (fallback for countries like India that lack ADM0 in some snapshots)
+  for (const entry of metadataEntries) {
+    if (entry.boundaryType !== "ADM1") {
+      continue;
+    }
+    for (const candidate of getMetadataNameCandidates(entry.boundaryName)) {
+      if (!lookup.has(candidate)) {
+        lookup.set(candidate, entry.boundaryISO);
+      }
+    }
+  }
+
   return lookup;
 }
 
@@ -319,6 +337,17 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
     let metadata = null;
     try {
       metadata = await resolveMetadata(requestedCountryName, normalizedLevel);
+      
+      // Fallback: If ADM2 is requested but not available, try ADM1
+      if (!metadata && normalizedLevel === "ADM2") {
+        metadata = await resolveMetadata(requestedCountryName, "ADM1");
+        if (metadata) {
+          logger?.info?.("boundary ADM2 not found, falling back to ADM1", {
+            countryName: requestedCountryName,
+            boundaryISO: metadata.boundaryISO
+          });
+        }
+      }
     } catch (error: any) {
       logger?.warn?.("boundary metadata fetch failed; using snapshot fallback if available", {
         countryName: requestedCountryName,
@@ -338,18 +367,18 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
       return {
         ok: true,
         source: "static_asset",
-        staticPath: `/boundaries/${metadata.boundaryISO.toLowerCase()}-${normalizedLevel.toLowerCase()}.topo.json`,
+        staticPath: `/boundaries/${metadata.boundaryISO.toLowerCase()}-${metadata.boundaryType.toLowerCase()}.topo.json`,
         countryName: requestedCountryName,
         matchedBoundaryName: metadata.boundaryName,
         boundaryISO: metadata.boundaryISO,
-        level: normalizedLevel
+        level: metadata.boundaryType
       };
     }
 
-    const cacheKey = `${metadata.boundaryISO}:${normalizedLevel}`;
+    const cacheKey = `${metadata.boundaryISO}:${metadata.boundaryType}`;
     const matchedSnapshotKey = buildBoundarySnapshotKey(
       metadata.boundaryName,
-      normalizedLevel
+      metadata.boundaryType
     );
     if (!detailCache.has(cacheKey)) {
       const fetchStart = Date.now();
@@ -369,7 +398,7 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
             logger?.info?.("fetched boundary detail from geoBoundaries", {
               countryName: requestedCountryName,
               boundaryISO: metadata.boundaryISO,
-              level: normalizedLevel,
+              level: metadata.boundaryType,
               durationMs: duration
             });
             const payload = {
@@ -378,7 +407,7 @@ export function createBoundaryDetailService({ kv, logger }: { kv: KVNamespace; l
               countryName: requestedCountryName,
               matchedBoundaryName: metadata.boundaryName,
               boundaryISO: metadata.boundaryISO,
-              level: normalizedLevel,
+              level: metadata.boundaryType,
               featureCollection: geojson
             };
             
