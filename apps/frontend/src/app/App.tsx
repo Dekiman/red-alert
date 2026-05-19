@@ -1,6 +1,7 @@
 import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Renderer } from "@json-render/react";
 import { registry } from "./ui-registry.js";
+import { shadcnComponents } from "@json-render/shadcn";
 
 const AlertMapPanel = lazy(() => import("./alert-map-panel.js").then(m => ({ default: m.AlertMapPanel })));
 
@@ -353,9 +354,14 @@ function StatusDot({ mode }: StatusDotProps) {
 
 function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="metric">
-      {label}: <span>{value}</span>
-    </div>
+    <shadcnComponents.Stack direction="horizontal" gap={2} align="center" justify="between" className="metric border-b border-white/5 pb-1">
+      <shadcnComponents.Text variant="muted" className="text-[10px] uppercase tracking-wider">
+        {label}:
+      </shadcnComponents.Text>
+      <shadcnComponents.Text variant="body" className="text-xs font-mono font-bold text-slate-100">
+        {value}
+      </shadcnComponents.Text>
+    </shadcnComponents.Stack>
   );
 }
 
@@ -419,6 +425,7 @@ export function App() {
   const [isWatchfloorCollapsed, setIsWatchfloorCollapsed] = useState(false);
   const [isNewsFeedCollapsed, setIsNewsFeedCollapsed] = useState(false);
   const [isAlertsPanelCollapsed, setIsAlertsPanelCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"globe" | "news" | "alerts">("globe");
   const [selectedNewsTypes, setSelectedNewsTypes] = useState<string[]>([]);
   const [selectedNewsSeverities, setSelectedNewsSeverities] = useState<number[]>([]);
   const [isNewsFilterOpen, setIsNewsFilterOpen] = useState(false);
@@ -792,7 +799,7 @@ export function App() {
   }, []);
 
   return (
-    <main className={`app-shell${isNewsFeedCollapsed ? " news-feed-collapsed" : ""}`}>
+    <main className={`app-shell mobile-${mobileTab}-active${isNewsFeedCollapsed ? " news-feed-collapsed" : ""}`}>
       <Suspense fallback={<div className="map-placeholder" />}>
         <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} date={customMapDate} />
       </Suspense>
@@ -1060,6 +1067,32 @@ export function App() {
             ) : null}
           </aside>
         </section>
+
+        <nav className="mobile-navbar">
+          <button 
+            className={`mobile-nav-item ${mobileTab === "globe" ? "active" : ""}`}
+            onClick={() => setMobileTab("globe")}
+          >
+            <span className="mobile-nav-icon">🌍</span>
+            <span className="mobile-nav-label">Globe</span>
+          </button>
+          <button 
+            className={`mobile-nav-item ${mobileTab === "news" ? "active" : ""}`}
+            onClick={() => setMobileTab("news")}
+          >
+            <span className="mobile-nav-icon">📰</span>
+            <span className="mobile-nav-label">News</span>
+            {filteredNewsEvents.length > 0 && <span className="mobile-nav-badge">{filteredNewsEvents.length}</span>}
+          </button>
+          <button 
+            className={`mobile-nav-item ${mobileTab === "alerts" ? "active" : ""}`}
+            onClick={() => setMobileTab("alerts")}
+          >
+            <span className="mobile-nav-icon">🚨</span>
+            <span className="mobile-nav-label">Alerts</span>
+            {visibleAlerts.length > 0 && <span className="mobile-nav-badge danger">{visibleAlerts.length}</span>}
+          </button>
+        </nav>
       </div>
     </main>
   );

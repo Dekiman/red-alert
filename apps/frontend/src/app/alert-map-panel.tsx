@@ -66,13 +66,6 @@ export function AlertMapPanel({ newsEvents, alerts, date }: AlertMapPanelProps) 
           />
         </Suspense>
         
-        <div className="globe-overlay globe-overlay-toolbar">
-          <div className="globe-toolbar">
-            <span className="alert-map-status">
-              Orbital View Active
-            </span>
-          </div>
-        </div>
         <div className="globe-overlay globe-overlay-legend">
           <span className="legend-chip">
             <span className="legend-swatch live"></span>

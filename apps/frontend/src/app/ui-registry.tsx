@@ -20,36 +20,57 @@ export const { registry } = defineRegistry(uiCatalog, {
     AlertCard: ({ props }) => {
       const { notificationId, source, threat, isDrill, locations, locationCount, alertTimestampIso } = props;
       const hasHebrewLocation = locations.some((value) => hasHebrew(value));
-      const locationClassName = hasHebrewLocation ? "locations rtl" : "locations";
+      const direction = hasHebrewLocation ? "rtl" : "ltr";
 
       return (
-        <article className="card alert-card">
-          <div className="card-head">
-            <strong>
-              {locationCount} location{locationCount === 1 ? "" : "s"}
-            </strong>
-            <span className="card-time">{formatTime(alertTimestampIso)}</span>
-          </div>
+        <shadcnComponents.Card className="alert-card overflow-hidden transition-all hover:border-red-500/50">
+          <shadcnComponents.Stack direction="vertical" gap={3} className="p-4">
+            <shadcnComponents.Stack direction="horizontal" justify="between" align="center">
+              <shadcnComponents.Heading level={4} className="text-sm font-bold text-red-500">
+                {locationCount} location{locationCount === 1 ? "" : "s"}
+              </shadcnComponents.Heading>
+              <shadcnComponents.Text variant="muted" className="text-xs">
+                {formatTime(alertTimestampIso)}
+              </shadcnComponents.Text>
+            </shadcnComponents.Stack>
 
-          <div className="tags">
-            <span className="tag">Source: {source}</span>
-            <span className="tag">Threat: {threat}</span>
-            <span className="tag">Drill: {isDrill ? "Yes" : "No"}</span>
-            <span className="tag">ID: {notificationId}</span>
-          </div>
+            <shadcnComponents.Stack direction="horizontal" gap={2} className="flex-wrap">
+              <shadcnComponents.Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-red-500/10 text-red-400 border-red-500/30">
+                🚨 {source}
+              </shadcnComponents.Badge>
+              <shadcnComponents.Badge variant="secondary" className="text-[10px] uppercase tracking-wider">
+                Threat: {threat}
+              </shadcnComponents.Badge>
+              {isDrill && (
+                <shadcnComponents.Badge variant="destructive" className="text-[10px] uppercase tracking-wider">
+                  DRILL
+                </shadcnComponents.Badge>
+              )}
+            </shadcnComponents.Stack>
 
-          <ul className={locationClassName}>
-            {locations.map((locationText, index) => (
-              <li
-                key={`${notificationId}-${locationText}-${index}`}
-                dir={hasHebrew(locationText) ? "rtl" : "ltr"}
-                lang={hasHebrew(locationText) ? "he" : "en"}
-              >
-                {locationText}
-              </li>
-            ))}
-          </ul>
-        </article>
+            <shadcnComponents.Separator className="opacity-10" />
+
+            <shadcnComponents.Stack 
+              direction="vertical" 
+              gap={1} 
+              className={direction === "rtl" ? "text-right font-hebrew" : "text-left"}
+            >
+              {locations.map((locationText, index) => (
+                <shadcnComponents.Text 
+                  key={`${notificationId}-${locationText}-${index}`}
+                  variant="body"
+                  className="text-sm leading-tight text-slate-200"
+                >
+                  {locationText}
+                </shadcnComponents.Text>
+              ))}
+            </shadcnComponents.Stack>
+
+            <shadcnComponents.Text variant="muted" className="text-[10px] opacity-50">
+              ID: {notificationId}
+            </shadcnComponents.Text>
+          </shadcnComponents.Stack>
+        </shadcnComponents.Card>
       );
     },
 
@@ -69,64 +90,95 @@ export const { registry } = defineRegistry(uiCatalog, {
       const locationParts = [newsEvent.locationName, newsEvent.region, newsEvent.country].filter(Boolean);
       const locationText = locationParts.length > 0 ? locationParts.join(" | ") : null;
       
+      const severityColor = newsEvent.severity && newsEvent.severity >= 4 ? "text-red-400" : "text-emerald-400";
+      const badgeVariant = newsEvent.severity && newsEvent.severity >= 4 ? "destructive" : "secondary";
+
       return (
-        <article className="card news-card">
-          <div className="card-head">
-            <strong>{(newsEvent.category || "news").toUpperCase()}</strong>
-            <span className="card-time">{formatNewsTime(newsEvent.updatedAtIso || newsEvent.createdAtIso)}</span>
-          </div>
+        <shadcnComponents.Card className="news-card overflow-hidden transition-all hover:border-emerald-500/50">
+          <shadcnComponents.Stack direction="vertical" gap={3} className="p-4">
+            <shadcnComponents.Stack direction="horizontal" justify="between" align="center">
+              <shadcnComponents.Text variant="lead" className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">
+                {(newsEvent.category || "news").toUpperCase()}
+              </shadcnComponents.Text>
+              <shadcnComponents.Text variant="muted" className="text-xs">
+                {formatNewsTime(newsEvent.updatedAtIso || newsEvent.createdAtIso)}
+              </shadcnComponents.Text>
+            </shadcnComponents.Stack>
 
-          {newsEvent.primarySignalUrl ? (
-            <a
-              className="news-title-link"
-              href={newsEvent.primarySignalUrl}
-              target="_blank"
-              rel="noreferrer"
-              dir={titleDir}
-              lang={titleLang}
-            >
-              <span className="news-title">{titleText}</span>
-            </a>
-          ) : (
-            <p className="news-title" dir={titleDir} lang={titleLang}>
-              {titleText}
-            </p>
-          )}
+            <shadcnComponents.Stack direction="vertical" gap={1}>
+              {newsEvent.primarySignalUrl ? (
+                <shadcnComponents.Link 
+                  href={newsEvent.primarySignalUrl}
+                  className={`text-sm font-semibold leading-tight hover:underline ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"}`}
+                >
+                  {titleText}
+                </shadcnComponents.Link>
+              ) : (
+                <shadcnComponents.Text 
+                  variant="body" 
+                  className={`text-sm font-semibold leading-tight ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"}`}
+                >
+                  {titleText}
+                </shadcnComponents.Text>
+              )}
 
-          {summaryText ? (
-            <p className="news-summary" dir={hasHebrew(summaryText) ? "rtl" : "ltr"} lang={hasHebrew(summaryText) ? "he" : "en"}>
-              {summaryText}
-            </p>
-          ) : null}
+              {locationText && (
+                <shadcnComponents.Text 
+                  variant="muted" 
+                  className={`text-[10px] italic ${hasHebrew(locationText) ? "text-right font-hebrew" : "text-left"}`}
+                >
+                  {locationText}
+                </shadcnComponents.Text>
+              )}
+            </shadcnComponents.Stack>
 
-          {locationText ? (
-            <p className="news-location" dir={hasHebrew(locationText) ? "rtl" : "ltr"} lang={hasHebrew(locationText) ? "he" : "en"}>
-              {locationText}
-            </p>
-          ) : null}
+            {summaryText && (
+              <shadcnComponents.Text 
+                variant="body" 
+                className={`text-xs text-slate-400 line-clamp-3 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"}`}
+              >
+                {summaryText}
+              </shadcnComponents.Text>
+            )}
 
-          <div className="tags">
-            <span className="tag">Type: {titleType}</span>
-            <span className="tag">Severity: {newsEvent.severity ?? "n/a"}</span>
-            <span className="tag">Signals: {newsEvent.signalCount ?? 0}</span>
-            <span className="tag">Sources: {sourceTypes || "unknown"}</span>
-          </div>
+            <shadcnComponents.Stack direction="horizontal" gap={2} className="flex-wrap pt-1">
+              <shadcnComponents.Badge variant="outline" className="text-[9px] uppercase tracking-tighter">
+                {titleType}
+              </shadcnComponents.Badge>
+              <shadcnComponents.Badge variant={badgeVariant} className="text-[9px] uppercase tracking-tighter">
+                Sev: {newsEvent.severity ?? "n/a"}
+              </shadcnComponents.Badge>
+              <shadcnComponents.Badge variant="secondary" className="text-[9px] uppercase tracking-tighter">
+                Signals: {newsEvent.signalCount ?? 0}
+              </shadcnComponents.Badge>
+            </shadcnComponents.Stack>
 
-          {newsEvent.primarySignalUrl ? (
-            <a className="news-link" href={newsEvent.primarySignalUrl} target="_blank" rel="noreferrer">
-              Open source ({newsEvent.primarySourceName || "news"})
-            </a>
-          ) : null}
-        </article>
+            {newsEvent.primarySignalUrl && (
+              <shadcnComponents.Stack direction="horizontal" justify="end">
+                <shadcnComponents.Link 
+                  href={newsEvent.primarySignalUrl}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors uppercase font-bold tracking-wider"
+                >
+                  Source: {newsEvent.primarySourceName || "news"} →
+                </shadcnComponents.Link>
+              </shadcnComponents.Stack>
+            )}
+          </shadcnComponents.Stack>
+        </shadcnComponents.Card>
       );
     },
 
     Metric: ({ props }) => {
       const { label, value } = props;
       return (
-        <div className="metric">
-          {label}: <span>{value}</span>
-        </div>
+        <shadcnComponents.Stack direction="horizontal" gap={2} align="center" justify="between" className="metric border-b border-white/5 pb-1">
+          <shadcnComponents.Text variant="muted" className="text-[10px] uppercase tracking-wider">
+            {label}:
+          </shadcnComponents.Text>
+          <shadcnComponents.Text variant="body" className="text-xs font-mono font-bold text-slate-100">
+            {String(value)}
+          </shadcnComponents.Text>
+        </shadcnComponents.Stack>
       );
     }
   },
