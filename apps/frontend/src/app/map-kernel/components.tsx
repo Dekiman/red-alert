@@ -587,6 +587,13 @@ export function AutoGeoBoundaryLayer(props: {
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation();
+    
+    // On mobile/touch devices, we need to ensure the country is detected and selected
+    // since onPointerMove might not have triggered accurately before the tap.
+    if (!activeCountry) {
+      handlePointerMove(e);
+    }
+    
     if (activeCountry) {
       onSelect?.(activeCountry);
     }
