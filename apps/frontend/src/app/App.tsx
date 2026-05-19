@@ -1,6 +1,7 @@
 import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Renderer } from "@json-render/react";
 import { registry } from "./ui-registry.js";
+import { shadcnComponents } from "@json-render/shadcn";
 
 const AlertMapPanel = lazy(() => import("./alert-map-panel.js").then(m => ({ default: m.AlertMapPanel })));
 
@@ -353,9 +354,14 @@ function StatusDot({ mode }: StatusDotProps) {
 
 function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="metric">
-      {label}: <span>{value}</span>
-    </div>
+    <shadcnComponents.Stack direction="horizontal" gap={2} align="center" justify="between" className="metric border-b border-white/5 pb-1">
+      <shadcnComponents.Text variant="muted" className="text-[10px] uppercase tracking-wider">
+        {label}:
+      </shadcnComponents.Text>
+      <shadcnComponents.Text variant="body" className="text-xs font-mono font-bold text-slate-100">
+        {value}
+      </shadcnComponents.Text>
+    </shadcnComponents.Stack>
   );
 }
 
