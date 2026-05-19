@@ -452,6 +452,14 @@ export function App() {
       : null;
   const isReplaySessionActive = isTimelineReplayActive && replayTimelineState.active;
   const isReplayFeedMode = isReplaySessionActive && replayRangeFromUnix != null && replayRangeToUnix != null;
+
+  const customMapDate = useMemo(() => {
+    if (isReplaySessionActive && replayCursorUnix != null) {
+      return new Date(replayCursorUnix * 1000);
+    }
+    return undefined;
+  }, [isReplaySessionActive, replayCursorUnix]);
+
   const liveNewsEvents = useMemo(
     () => {
       const merged = mergeNewsEventLists(historicalNewsEvents, storeNewsEvents);
@@ -786,7 +794,7 @@ export function App() {
   return (
     <main className={`app-shell${isNewsFeedCollapsed ? " news-feed-collapsed" : ""}`}>
       <Suspense fallback={<div className="map-placeholder" />}>
-        <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} />
+        <AlertMapPanel newsEvents={globeNewsEvents} alerts={visibleAlerts} date={customMapDate} />
       </Suspense>
 
       <div className="interface-overlay">

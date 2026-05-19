@@ -51,39 +51,34 @@ export function latLngToOffsetSurfaceVector3(
 
 /**
  * Calculates the subsolar point (lat, lng) for a given date.
+ * Returns longitude in a 'celestial' frame where 0 longitude is where the sun is at 12:00 UTC.
  */
 export function getSubsolarPoint(date: Date) {
   const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
-  const hour = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
-
-  // Declination
+  
+  // Declination (Latitude of the sun)
   const declination = -23.44 * Math.cos(MathUtils.degToRad((360 / 365) * (dayOfYear + 10)));
   
-  // Longitude (approximate subsolar longitude)
-  // At 12:00 UTC, the subsolar point is roughly at 0 degrees longitude (Greenwich)
-  // Earth rotates ~15 degrees per hour.
-  const lng = -15 * (hour - 12);
+  // Longitude in world space. We keep the sun at 0 longitude (Z+).
+  // The Globe's rotation handles the time-of-day.
+  const lng = 0;
 
-  return { lat: declination, lng: ((lng + 180) % 360) - 180 };
+  return { lat: declination, lng };
 }
 
 /**
  * Calculates the approximate sublunar point (lat, lng) for a given date.
  */
 export function getSublunarPoint(date: Date) {
-  // Very simplified lunar cycle approximation
   const msSinceEpoch = date.getTime();
   const lunarMonthMs = 29.53059 * 24 * 60 * 60 * 1000;
   const phase = (msSinceEpoch % lunarMonthMs) / lunarMonthMs;
   
-  // Moon orbits roughly on the ecliptic (with ~5 deg inclination)
+  // Moon orbits roughly on the ecliptic
   const declination = 20 * Math.sin(MathUtils.degToRad(phase * 360));
   
-  // Moon longitude moves ~13.2 degrees per day relative to stars, 
-  // but Earth's rotation is the dominant factor for the sublunar point.
-  const hour = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
-  const moonLngOffset = phase * 360;
-  const lng = -15 * (hour - 12) + moonLngOffset;
+  // Relative to the stars/sun, the moon moves ~360 degrees per lunar month
+  const lng = phase * 360;
 
   return { lat: declination, lng: ((lng + 180) % 360) - 180 };
 }

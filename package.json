@@ -8,6 +8,7 @@
     "build": "bun --filter '*' build",
     "deploy": "bun --filter backend deploy && bun --filter frontend deploy",
     "build:boundaries": "bun scripts/build-boundaries.ts",
+    "build:mask": "bun scripts/build-earth-mask.ts",
     "lint": "oxlint .",
     "typecheck": "tsgo --noEmit"
   },
