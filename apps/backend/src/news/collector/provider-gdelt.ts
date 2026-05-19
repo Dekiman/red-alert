@@ -9,6 +9,7 @@ type CreateGdeltProviderOptions = {
   query: string;
   maxRecords: number;
   maxEvents: number;
+  throttleMs?: number;
 };
 
 function buildEventId(article: any) {
@@ -59,10 +60,12 @@ export function createGdeltProvider({
   apiUrl,
   query,
   maxRecords,
-  maxEvents
+  maxEvents,
+  throttleMs
 }: CreateGdeltProviderOptions): OsintNewsProvider {
   return {
     name: "gdelt",
+    throttleMs,
     async fetchEvents(): Promise<ProviderCollectedEvent[]> {
       const url = new URL(apiUrl);
       if (!url.searchParams.has("query")) {
@@ -80,6 +83,9 @@ export function createGdeltProvider({
 
       for (const article of articles) {
         const title = normalizeWhitespace(article?.title);
+        if (title.toLowerCase().includes("earthquake")) {
+          continue;
+        }
         const articleUrl = normalizeWhitespace(article?.url) || null;
         if (!title && !articleUrl) {
           continue;

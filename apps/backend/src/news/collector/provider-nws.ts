@@ -12,6 +12,7 @@ type CreateNwsProviderOptions = {
   fetchJson: (url: string) => Promise<any>;
   apiUrl: string;
   maxEvents: number;
+  throttleMs?: number;
 };
 
 type NwsZoneSnapshot = {
@@ -70,13 +71,17 @@ function isNwsTestAlert(properties: any) {
 
 function categoryFromNws(properties: any) {
   const normalized = normalizeWhitespace(properties?.category).toLowerCase();
+  if (normalized === "geo") {
+    return null;
+  }
   return NWS_CATEGORY_MAP[normalized] ?? "warning";
 }
 
 export function createNwsProvider({
   fetchJson,
   apiUrl,
-  maxEvents
+  maxEvents,
+  throttleMs
 }: CreateNwsProviderOptions): OsintNewsProvider {
   const zoneSnapshotCache = new Map<string, Promise<NwsZoneSnapshot>>();
 
@@ -115,6 +120,7 @@ export function createNwsProvider({
 
   return {
     name: "nws",
+    throttleMs,
     async fetchEvents(): Promise<ProviderCollectedEvent[]> {
       const payload = await fetchJson(apiUrl);
       const features = Array.isArray(payload?.features) ? payload.features : [];
@@ -166,6 +172,9 @@ export function createNwsProvider({
 
         const stateNames = dedupeStrings(zoneSnapshots.map((snapshot) => snapshot.state ?? "").filter(Boolean));
         const category = categoryFromNws(properties);
+        if (!category) {
+          continue;
+        }
         const eventId = `nws-${rawIdentifier}`;
         const title =
           normalizeWhitespace(properties?.headline) ||

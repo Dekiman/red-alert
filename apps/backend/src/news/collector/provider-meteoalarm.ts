@@ -12,6 +12,7 @@ type CreateMeteoalarmProviderOptions = {
   fetchText: (url: string) => Promise<string>;
   apiUrl: string;
   maxEvents: number;
+  throttleMs?: number;
 };
 
 type MeteoalarmCountrySnapshot = {
@@ -132,10 +133,12 @@ function severityFromMeteoalarmLevel(level: number) {
 export function createMeteoalarmProvider({
   fetchText,
   apiUrl,
-  maxEvents
+  maxEvents,
+  throttleMs
 }: CreateMeteoalarmProviderOptions): OsintNewsProvider {
   return {
     name: "meteoalarm",
+    throttleMs,
     async fetchEvents(): Promise<ProviderCollectedEvent[]> {
       const xmlPayload = await fetchText(apiUrl);
       const itemBlocks = Array.from(xmlPayload.matchAll(/<item>([\s\S]*?)<\/item>/gi)).map((match) => match[1]);

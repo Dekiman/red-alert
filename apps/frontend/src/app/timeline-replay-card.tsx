@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PolygonReplayEventPayload, PolygonReplayTimelinePayload } from "./contracts.js";
 import { formatTime } from "./text-utils.js";
+import { 
+  Play, 
+  Pause, 
+  RotateCcw, 
+  Clock, 
+  Zap, 
+  History,
+  AlertCircle,
+  Activity,
+  ChevronDown,
+  ChevronUp
+} from "lucide-react";
 
 const STATE_WINDOW_MINUTES = 15;
+
 const REPLAY_RANGE_OPTIONS = [
   {
     key: "10m",
@@ -53,34 +66,23 @@ const REPLAY_RANGE_OPTIONS = [
     maxFrameStepSeconds: 20 * 60
   }
 ] as const;
+
+type ReplayRangeKey = (typeof REPLAY_RANGE_OPTIONS)[number]["key"];
+type ReplayRangeOption = (typeof REPLAY_RANGE_OPTIONS)[number];
+
 const REPLAY_SPEED_MIN = 0.5;
 const REPLAY_SPEED_MAX = 10;
 const REPLAY_SPEED_STEP = 0.5;
 
-type ReplayRangeOption = (typeof REPLAY_RANGE_OPTIONS)[number];
-type ReplayRangeKey = ReplayRangeOption["key"];
 type ReplaySpeedMultiplier = number;
-
-interface ReplayStateItem {
-  localityId: number;
-  stage: "active_siren" | "post_siren_unsafe";
-  stageStartedAtUnix: number;
-  latestAlertTimestampUnix: number;
-}
 
 interface TimelineReplayCardProps {
   onReplayModeChanged: (active: boolean) => void;
-  onReplayStateChanged?: (state: ReplayTimelineState) => void;
+  onReplayStateChanged?: (state: ReplayStatePayload) => void;
   onReplayTimelineEventsChanged?: (events: PolygonReplayEventPayload[]) => void;
 }
 
-interface ReplayTransitionDelta {
-  toActiveSiren: number;
-  toPostSirenUnsafe: number;
-  cleared: number;
-}
-
-export interface ReplayTimelineState {
+export interface ReplayStatePayload {
   active: boolean;
   rangeKey: ReplayRangeKey;
   rangeMinutes: number;
@@ -90,73 +92,65 @@ export interface ReplayTimelineState {
   replayUnix: number | null;
 }
 
-function toReplayTimelinePayload(input: unknown): PolygonReplayTimelinePayload | null {
-  if (!input || typeof input !== "object") {
-    return null;
-  }
-  const payload = input as PolygonReplayTimelinePayload;
-  if (!Array.isArray(payload.events)) {
-    return null;
-  }
-  if (!Number.isFinite(Number(payload.rangeFromUnix)) || !Number.isFinite(Number(payload.rangeToUnix))) {
-    return null;
-  }
-  return payload;
+interface ReplayTransitionDelta {
+  toActiveSiren: number;
+  toPostSirenUnsafe: number;
+  cleared: number;
 }
 
-function buildReplayStatesAtUnix(
-  events: PolygonReplayEventPayload[],
-  replayUnix: number,
-  stateWindowMinutes: number
-): ReplayStateItem[] {
-  const replayUnixFloor = Math.floor(replayUnix);
-  const windowStartUnix = replayUnixFloor - Math.max(1, Math.floor(stateWindowMinutes * 60));
-  const latestByLocalityId = new Map<number, number>();
+interface ReplayStateItem {
+  localityId: number;
+  stage: "active_siren" | "post_siren_unsafe";
+}
 
-  for (const eventItem of events) {
-    const eventUnix = Number(eventItem?.alertTimestampUnix);
-    if (!Number.isFinite(eventUnix)) {
-      continue;
-    }
-    if (eventUnix > replayUnixFloor) {
-      break;
-    }
-    if (eventUnix < windowStartUnix) {
-      continue;
-    }
-    if (!Array.isArray(eventItem?.localityIds) || eventItem.localityIds.length === 0) {
-      continue;
-    }
-
-    for (const localityIdRaw of eventItem.localityIds) {
-      const localityId = Number(localityIdRaw);
-      if (!Number.isFinite(localityId)) {
-        continue;
-      }
-      const previousUnix = latestByLocalityId.get(localityId);
-      if (!Number.isFinite(previousUnix) || eventUnix >= previousUnix) {
-        latestByLocalityId.set(localityId, eventUnix);
-      }
-    }
-  }
-
-  return Array.from(latestByLocalityId.entries())
-    .map(([localityId, latestAlertTimestampUnix]) => {
-      const ageSeconds = replayUnixFloor - latestAlertTimestampUnix;
-      const stage = ageSeconds <= 60 ? "active_siren" : "post_siren_unsafe";
-      const stageStartedAtUnix = stage === "active_siren" ? latestAlertTimestampUnix : latestAlertTimestampUnix + 60;
-      return {
-        localityId,
-        stage,
-        stageStartedAtUnix,
-        latestAlertTimestampUnix
-      } as ReplayStateItem;
-    })
-    .sort((a, b) => a.localityId - b.localityId);
+function toReplayTimelinePayload(data: unknown): PolygonReplayTimelinePayload | null {
+  if (typeof data !== "object" || data === null) return null;
+  const partial = data as Partial<PolygonReplayTimelinePayload>;
+  if (!Number.isFinite(Number(partial.rangeFromUnix))) return null;
+  if (!Number.isFinite(Number(partial.rangeToUnix))) return null;
+  return {
+    rangeFromUnix: Number(partial.rangeFromUnix),
+    rangeToUnix: Number(partial.rangeToUnix),
+    stateWindowMinutes: Number(partial.stateWindowMinutes),
+    events: Array.isArray(partial.events) ? (partial.events as PolygonReplayEventPayload[]) : []
+  };
 }
 
 function getRangeOptionByKey(rangeKey: ReplayRangeKey): ReplayRangeOption {
   return REPLAY_RANGE_OPTIONS.find((option) => option.key === rangeKey) ?? REPLAY_RANGE_OPTIONS[0];
+}
+
+function buildReplayStatesAtUnix(
+  events: PolygonReplayEventPayload[],
+  cursorUnix: number,
+  windowMinutes: number
+): ReplayStateItem[] {
+  const windowSeconds = windowMinutes * 60;
+  const windowStartUnix = cursorUnix - windowSeconds;
+
+  const latestByLocality = new Map<number, PolygonReplayEventPayload>();
+  for (const event of events) {
+    const timestamp = Number(event.alertTimestampUnix);
+    if (timestamp > cursorUnix || timestamp < windowStartUnix) {
+      continue;
+    }
+    const existing = latestByLocality.get(event.localityId);
+    if (!existing || timestamp > Number(existing.alertTimestampUnix)) {
+      latestByLocality.set(event.localityId, event);
+    }
+  }
+
+  const results: ReplayStateItem[] = [];
+  for (const [localityId, event] of latestByLocality) {
+    const timestamp = Number(event.alertTimestampUnix);
+    const sirenEndUnix = timestamp + 90; 
+    results.push({
+      localityId,
+      stage: cursorUnix <= sirenEndUnix ? "active_siren" : "post_siren_unsafe"
+    });
+  }
+
+  return results;
 }
 
 export function TimelineReplayCard({
@@ -165,6 +159,7 @@ export function TimelineReplayCard({
   onReplayTimelineEventsChanged
 }: TimelineReplayCardProps) {
   const [isReplayActive, setIsReplayActive] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [selectedRangeKey, setSelectedRangeKey] = useState<ReplayRangeKey>("10m");
   const [timelinePayload, setTimelinePayload] = useState<PolygonReplayTimelinePayload | null>(null);
   const [replayUnix, setReplayUnix] = useState<number | null>(null);
@@ -184,6 +179,7 @@ export function TimelineReplayCard({
   const effectiveReplayUnix =
     Number.isFinite(replayUnix) && replayUnix != null ? replayUnix : Number.isFinite(timelineToUnix) ? timelineToUnix : null;
   const cursorUnixFloor = Number.isFinite(effectiveReplayUnix) ? Math.floor(Number(effectiveReplayUnix)) : null;
+  
   const cursorEventCount = useMemo(() => {
     if (!Number.isFinite(cursorUnixFloor)) {
       return 0;
@@ -196,6 +192,7 @@ export function TimelineReplayCard({
       return eventUnix === cursorUnixFloor ? count + 1 : count;
     }, 0);
   }, [timelineEvents, cursorUnixFloor]);
+
   const playbackSecondsPerSecond = Math.max(
     1,
     (selectedRange.minutes * 60 * playbackSpeed) / selectedRange.targetPlaybackDurationSeconds
@@ -229,7 +226,7 @@ export function TimelineReplayCard({
       } catch {
         if (rawText.trim().startsWith("<")) {
           throw new Error(
-            "Replay API returned HTML instead of JSON. Start/restart backend on 127.0.0.1:8787 or use Vite proxy."
+            "Replay API returned HTML instead of JSON. Start/restart backend on 127.0.0.1:8787."
           );
         }
         throw new Error("Replay API returned invalid JSON payload.");
@@ -237,7 +234,7 @@ export function TimelineReplayCard({
 
       const payload = toReplayTimelinePayload(parsed);
       if (!payload) {
-        throw new Error("invalid replay payload");
+        throw new Error("Invalid replay payload");
       }
       previousStageByLocalityRef.current.clear();
       setTransitionDelta(null);
@@ -248,7 +245,7 @@ export function TimelineReplayCard({
       setTransitionDelta(null);
       setTimelinePayload(null);
       setReplayUnix(null);
-      setErrorText(error instanceof Error ? error.message : "failed to load replay data");
+      setErrorText(error instanceof Error ? error.message : "Failed to load replay data");
     } finally {
       setLoading(false);
     }
@@ -282,7 +279,8 @@ export function TimelineReplayCard({
     selectedRange.minutes,
     timelineFromUnix,
     timelineToUnix,
-    effectiveReplayUnix
+    effectiveReplayUnix,
+    timelinePayload?.stateWindowMinutes
   ]);
 
   useEffect(() => {
@@ -412,151 +410,180 @@ export function TimelineReplayCard({
       : timelineToUnix;
 
   return (
-    <section className="timeline-replay card" aria-label="Incident timeline replay">
-      <div className="timeline-replay-head">
-        <div>
-          <h3 className="timeline-replay-title">Incident Timeline Replay</h3>
-          <p className="timeline-replay-subtitle">Scrub historical map state and inspect polygon transitions.</p>
-        </div>
-        <button
-          type="button"
-          className={`timeline-toggle ${isReplayActive ? "active" : ""}`}
-          onClick={() => setIsReplayActive((current) => !current)}
-        >
-          {isReplayActive ? "Exit Replay" : "Start Replay"}
-        </button>
-      </div>
-
-      {isReplayActive ? (
-        <>
-          <div className="timeline-replay-ranges">
-            {REPLAY_RANGE_OPTIONS.map((option) => (
+    <section 
+      className={`card transition-all duration-200 border-l-2 ${isReplayActive ? "border-l-orange-500 bg-orange-500/5" : "border-l-transparent bg-white/[0.03]"}`} 
+      aria-label="Incident timeline replay"
+    >
+      <div className={`flex flex-col ${isCollapsed ? "p-2 px-3" : "gap-4 p-4"}`}>
+        <div className="flex justify-between items-center gap-4">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <h3 className="text-[13px] font-bold tracking-tight text-orange-500 uppercase flex items-center gap-1.5 truncate">
+              <History className="w-3.5 h-3.5 shrink-0" />
+              Timeline Replay
+              {isCollapsed && isReplayActive && (
+                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+              )}
+            </h3>
+            {!isCollapsed && (
+              <p className="text-[11px] text-muted-foreground font-medium leading-tight">
+                Scrub historical state and transitions.
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {!isCollapsed && (
               <button
-                key={option.key}
                 type="button"
-                className={`timeline-range-btn ${selectedRangeKey === option.key ? "active" : ""}`}
-                onClick={() => setSelectedRangeKey(option.key)}
-                disabled={loading}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all focus-visible:ring-1 focus-visible:ring-orange-500 focus-visible:outline-none ${isReplayActive ? "bg-orange-500 text-white" : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10"}`}
+                onClick={() => setIsReplayActive((current) => !current)}
               >
-                {option.label}
+                {isReplayActive ? "Live View" : "Start Replay"}
               </button>
-            ))}
-          </div>
-
-          <div className="timeline-replay-row">
+            )}
             <button
               type="button"
-              className="timeline-play-btn"
-              disabled={!hasTimeline || loading}
-              onClick={() => {
-                if (isPlaying) {
-                  setIsPlaying(false);
-                  return;
-                }
-
-                if (!hasTimeline) {
-                  return;
-                }
-
-                setReplayUnix((currentValue) => {
-                  const currentUnix = Number.isFinite(currentValue) ? Number(currentValue) : timelineToUnix;
-                  return currentUnix >= timelineToUnix ? timelineFromUnix : currentUnix;
-                });
-                setIsPlaying(true);
-              }}
+              className="p-1 rounded-md text-muted-foreground hover:text-orange-500 hover:bg-white/5 transition-colors"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
             >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-            <button
-              type="button"
-              className="timeline-refresh-btn"
-              disabled={loading}
-              onClick={() => void loadReplayTimeline(selectedRange.minutes)}
-            >
-              Refresh
+              {isCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           </div>
+        </div>
 
-          <div className="timeline-replay-row timeline-speed-row">
-            <label className="timeline-speed-control">
-              <span className="timeline-speed-label">Replay speed</span>
-              <input
-                className="timeline-speed-slider"
-                type="range"
-                min={REPLAY_SPEED_MIN}
-                max={REPLAY_SPEED_MAX}
-                step={REPLAY_SPEED_STEP}
-                value={playbackSpeed}
-                disabled={loading}
-                onInput={(event) => {
-                  setPlaybackSpeed(Number(event.currentTarget.value));
-                }}
-                onChange={(event) => {
-                  setPlaybackSpeed(Number(event.currentTarget.value));
-                }}
-              />
-            </label>
-            <strong className="timeline-speed-value">{playbackSpeed.toFixed(1)}x</strong>
+        {!isCollapsed && (
+          <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+            {isReplayActive ? (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-wrap gap-1">
+                  {REPLAY_RANGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`px-2 py-1 rounded text-[10px] font-bold tabular-nums transition-colors ${selectedRangeKey === option.key ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" : "bg-white/5 text-muted-foreground border border-white/5 hover:border-white/10"}`}
+                      onClick={() => setSelectedRangeKey(option.key)}
+                      disabled={loading}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-500 text-white hover:bg-orange-600 transition-colors disabled:opacity-50"
+                    disabled={!hasTimeline || loading}
+                    onClick={() => {
+                      if (isPlaying) {
+                        setIsPlaying(false);
+                        return;
+                      }
+                      if (!hasTimeline) return;
+                      setReplayUnix((currentValue) => {
+                        const currentUnix = Number.isFinite(currentValue) ? Number(currentValue) : timelineToUnix;
+                        return currentUnix >= timelineToUnix ? timelineFromUnix : currentUnix;
+                      });
+                      setIsPlaying(true);
+                    }}
+                  >
+                    {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
+                    disabled={loading}
+                    onClick={() => void loadReplayTimeline(selectedRange.minutes)}
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+                  </button>
+
+                  <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex justify-between items-center text-[9px] uppercase font-bold tracking-widest text-muted-foreground/60">
+                      <span>Playback Speed</span>
+                      <span className="text-orange-400 tabular-nums">{playbackSpeed.toFixed(1)}x</span>
+                    </div>
+                    <input
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                      type="range"
+                      min={REPLAY_SPEED_MIN}
+                      max={REPLAY_SPEED_MAX}
+                      step={REPLAY_SPEED_STEP}
+                      value={playbackSpeed}
+                      disabled={loading}
+                      onChange={(event) => setPlaybackSpeed(Number(event.currentTarget.value))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] font-mono font-bold text-orange-400 tabular-nums">
+                      {effectiveReplayUnix ? formatTime(new Date(effectiveReplayUnix * 1000).toISOString()) : "--:--:--"}
+                    </span>
+                    <div className="flex items-center gap-1 text-[9px] text-muted-foreground/50 uppercase font-bold">
+                      <Clock className="w-3 h-3" />
+                      {selectedRange.label}&nbsp;Window
+                    </div>
+                  </div>
+                  <input
+                    className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                    type="range"
+                    min={hasTimeline ? timelineFromUnix : 0}
+                    max={hasTimeline ? timelineToUnix : 0}
+                    step={selectedRange.scrubStepSeconds}
+                    value={hasTimeline ? replayProgressValue : 0}
+                    disabled={!hasTimeline || loading}
+                    onChange={(event) => applyCursorUnix(Number(event.currentTarget.value))}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/5">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold">Events</span>
+                    <span className="text-[11px] font-bold text-slate-100 tabular-nums">
+                      {timelineEvents.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold">At Cursor</span>
+                    <span className="text-[11px] font-bold text-slate-100 tabular-nums">
+                      {cursorEventCount}
+                    </span>
+                  </div>
+                  {transitionDelta && (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold">Sirens</span>
+                      <span className="text-[11px] font-bold text-red-400 tabular-nums">
+                        +{transitionDelta.toActiveSiren}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {loading && (
+                  <div className="flex items-center justify-center py-2">
+                    <RotateCcw className="w-4 h-4 text-orange-500 animate-spin" />
+                  </div>
+                )}
+
+                {errorText && (
+                  <div className="flex items-start gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-medium text-red-400 leading-tight">{errorText}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-2 bg-emerald-500/5 border border-emerald-500/10 rounded">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <p className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-tight">Live Stream Active</p>
+              </div>
+            )}
           </div>
-
-          <input
-            className="timeline-slider"
-            type="range"
-            min={hasTimeline ? timelineFromUnix : 0}
-            max={hasTimeline ? timelineToUnix : 0}
-            step={selectedRange.scrubStepSeconds}
-            value={hasTimeline ? replayProgressValue : 0}
-            disabled={!hasTimeline || loading}
-            onInput={(event) => {
-              applyCursorUnix(Number(event.currentTarget.value));
-            }}
-            onChange={(event) => {
-              applyCursorUnix(Number(event.currentTarget.value));
-            }}
-          />
-
-          <div className="timeline-replay-meta">
-            <span>
-              Cursor:{" "}
-              <strong>{effectiveReplayUnix ? formatTime(new Date(effectiveReplayUnix * 1000).toISOString()) : "-"}</strong>
-            </span>
-            <span>
-              Events: <strong>{timelineEvents.length}</strong>
-            </span>
-            <span>
-              At cursor: <strong>{cursorEventCount} transition event{cursorEventCount === 1 ? "" : "s"}</strong>
-            </span>
-            <span>
-              Window: <strong>{STATE_WINDOW_MINUTES}m</strong>
-            </span>
-            <span>
-              Speed: <strong>{playbackSpeed}x</strong>
-            </span>
-          </div>
-
-          {transitionDelta ? (
-            <div className="timeline-replay-meta">
-              <span>
-                +Active: <strong>{transitionDelta.toActiveSiren}</strong>
-              </span>
-              <span>
-                +Unsafe: <strong>{transitionDelta.toPostSirenUnsafe}</strong>
-              </span>
-              <span>
-                Cleared: <strong>{transitionDelta.cleared}</strong>
-              </span>
-            </div>
-          ) : null}
-
-          {loading ? <div className="timeline-replay-note">Loading replay timeline...</div> : null}
-          {errorText ? <div className="timeline-replay-error">Replay error: {errorText}</div> : null}
-          {!loading && !errorText && timelineEvents.length === 0 ? (
-            <div className="timeline-replay-note">No alert events found in this range.</div>
-          ) : null}
-        </>
-      ) : (
-        <div className="timeline-replay-note">Replay is off. Live map stream is active.</div>
-      )}
+        )}
+      </div>
     </section>
   );
 }

@@ -16,4 +16,5 @@ export type ProviderCollectedEvent = {
 export type OsintNewsProvider = {
   name: string;
   fetchEvents: () => Promise<ProviderCollectedEvent[]>;
+  throttleMs?: number;
 };

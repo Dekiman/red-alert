@@ -23,16 +23,19 @@ type CreateGdacsProviderOptions = {
   apiUrl: string;
   lookbackDays: number;
   maxEvents: number;
+  throttleMs?: number;
 };
 
 export function createGdacsProvider({
   fetchJson,
   apiUrl,
   lookbackDays,
-  maxEvents
+  maxEvents,
+  throttleMs
 }: CreateGdacsProviderOptions): OsintNewsProvider {
   return {
     name: "gdacs",
+    throttleMs,
     async fetchEvents(): Promise<ProviderCollectedEvent[]> {
       const fromDateIso = new Date(Date.now() - Math.max(1, lookbackDays) * 86400000)
         .toISOString()
@@ -48,6 +51,9 @@ export function createGdacsProvider({
       for (const feature of features) {
         const properties = feature?.properties ?? {};
         const eventType = normalizeWhitespace(properties?.eventtype).toUpperCase();
+        if (eventType === "EQ") {
+          continue;
+        }
         const eventIdRaw = normalizeWhitespace(properties?.eventid);
         const episodeIdRaw = normalizeWhitespace(properties?.episodeid);
         if (!eventIdRaw) {

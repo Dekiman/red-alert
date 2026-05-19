@@ -6,6 +6,12 @@ import { createUsgsProvider } from "./provider-usgs.js";
 import { createWeatherCanadaProvider } from "./provider-weather-canada.js";
 import type { OsintNewsProvider } from "./provider-types.js";
 
+const DEFAULT_THROTTLES_MS: Record<string, number> = {
+  usgs: 300_000, // 5 minutes
+  gdacs: 60_000, // 1 minute
+  gdelt: 60_000 // 1 minute
+};
+
 type CreateOsintProvidersOptions = {
   providerNames: string[];
   includeWeatherProviders?: boolean;
@@ -50,7 +56,8 @@ export function createOsintProviders({
         fetchJson,
         apiUrl: gdacsApiUrl,
         lookbackDays: gdacsLookbackDays,
-        maxEvents: maxEventsPerProvider
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.gdacs
       })
     ],
     [
@@ -58,7 +65,8 @@ export function createOsintProviders({
       createUsgsProvider({
         fetchJson,
         apiUrl: usgsApiUrl,
-        maxEvents: maxEventsPerProvider
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.usgs
       })
     ],
     [
@@ -68,7 +76,8 @@ export function createOsintProviders({
         apiUrl: gdeltApiUrl,
         query: gdeltQuery,
         maxRecords: gdeltMaxRecords,
-        maxEvents: maxEventsPerProvider
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.gdelt
       })
     ],
     [

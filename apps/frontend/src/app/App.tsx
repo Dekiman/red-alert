@@ -20,6 +20,7 @@ import { useDashboardSocket } from "./use-dashboard-socket.js";
 import { useDashboardStore } from "../stores/useDashboardStore.js";
 import { LiveClockValue } from "./live-clock-value.js";
 import { TimelineReplayCard, type ReplayTimelineState } from "./timeline-replay-card.js";
+import { Globe, Newspaper, Bell } from "lucide-react";
 
 const LIVE_NEWS_FEED_API_URL = "/api/live-news";
 const REPLAY_NEWS_FEED_LIMIT = 20_000;
@@ -353,11 +354,11 @@ function StatusDot({ mode }: StatusDotProps) {
 
 function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex justify-between items-center gap-2 border-b border-white/5 pb-1 metric">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}:
+    <div className="flex justify-between items-center gap-4 py-1.5 border-b border-white/5 metric">
+      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
       </span>
-      <span className="text-xs font-mono font-bold text-slate-100">
+      <span className="text-[12px] font-mono font-bold text-slate-100 tabular-nums">
         {value}
       </span>
     </div>
@@ -1072,14 +1073,18 @@ export function App() {
             className={`mobile-nav-item ${mobileTab === "globe" ? "active" : ""}`}
             onClick={() => setMobileTab("globe")}
           >
-            <span className="mobile-nav-icon">🌍</span>
+            <span className="mobile-nav-icon">
+              <Globe className="w-6 h-6" />
+            </span>
             <span className="mobile-nav-label">Globe</span>
           </button>
           <button 
             className={`mobile-nav-item ${mobileTab === "news" ? "active" : ""}`}
             onClick={() => setMobileTab("news")}
           >
-            <span className="mobile-nav-icon">📰</span>
+            <span className="mobile-nav-icon">
+              <Newspaper className="w-6 h-6" />
+            </span>
             <span className="mobile-nav-label">News</span>
             {filteredNewsEvents.length > 0 && <span className="mobile-nav-badge">{filteredNewsEvents.length}</span>}
           </button>
@@ -1087,7 +1092,9 @@ export function App() {
             className={`mobile-nav-item ${mobileTab === "alerts" ? "active" : ""}`}
             onClick={() => setMobileTab("alerts")}
           >
-            <span className="mobile-nav-icon">🚨</span>
+            <span className="mobile-nav-icon">
+              <Bell className="w-6 h-6" />
+            </span>
             <span className="mobile-nav-label">Alerts</span>
             {visibleAlerts.length > 0 && <span className="mobile-nav-badge danger">{visibleAlerts.length}</span>}
           </button>

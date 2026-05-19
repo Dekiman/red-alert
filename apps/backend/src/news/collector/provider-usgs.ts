@@ -5,6 +5,7 @@ type CreateUsgsProviderOptions = {
   fetchJson: (url: string) => Promise<any>;
   apiUrl: string;
   maxEvents: number;
+  throttleMs?: number;
 };
 
 function toEarthquakeSeverity(magnitude: unknown) {
@@ -18,10 +19,12 @@ function toEarthquakeSeverity(magnitude: unknown) {
 export function createUsgsProvider({
   fetchJson,
   apiUrl,
-  maxEvents
+  maxEvents,
+  throttleMs
 }: CreateUsgsProviderOptions): OsintNewsProvider {
   return {
     name: "usgs",
+    throttleMs,
     async fetchEvents(): Promise<ProviderCollectedEvent[]> {
       const payload = await fetchJson(apiUrl);
       const features = Array.isArray(payload?.features) ? payload.features : [];

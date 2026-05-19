@@ -48,9 +48,9 @@ export const envSchema = z.object({
   // Provider URLs
   RED_ALERT_NEWS_GDACS_API_URL: z.string().default("https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"),
   RED_ALERT_NEWS_GDACS_LOOKBACK_DAYS: numberSchema(14, 1),
-  RED_ALERT_NEWS_USGS_API_URL: z.string().default("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"),
+  RED_ALERT_NEWS_USGS_API_URL: z.string().default("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson"),
   RED_ALERT_NEWS_GDELT_API_URL: z.string().default("https://api.gdeltproject.org/api/v2/doc/doc"),
-  RED_ALERT_NEWS_GDELT_QUERY: z.string().default("(conflict OR missile OR strike OR earthquake OR flood OR wildfire)"),
+  RED_ALERT_NEWS_GDELT_QUERY: z.string().default("(conflict OR missile OR strike OR flood OR wildfire)"),
   RED_ALERT_NEWS_GDELT_MAX_RECORDS: numberSchema(60, 1),
   RED_ALERT_NEWS_NWS_API_URL: z.string().default("https://api.weather.gov/alerts/active"),
   RED_ALERT_NEWS_WEATHER_CANADA_API_URL: z.string().default("https://api.weather.gc.ca/collections/weather-alerts/items?f=json"),

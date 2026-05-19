@@ -285,7 +285,7 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
           console.log(`[CollectionPipeline] Provider ${provider.name} returned ${events.length} events`);
           
           await database.news.setProviderBackoff(provider.name, {
-            backoffUntilMs: 0,
+            backoffUntilMs: provider.throttleMs ? nowMs + provider.throttleMs : 0,
             rateLimitCount: 0,
             transientErrorCount: 0
           });
