@@ -6,7 +6,7 @@ import { createLogger } from '../logger.js';
 import { createLocalityMapRuntime } from '../locality-map/runtime.js';
 import { createBoundaryDetailService } from '../boundary-detail/service.js';
 import { createPolygonStateService } from '../polygon-state/service.js';
-import { createNewsRuntime } from '../news/runtime.js';
+import { createNewsRuntime, createNewsCollectionRunner } from '../news/runtime.js';
 
 function parseIntegerQueryValue(value: string | string[] | undefined): number | null {
   if (Array.isArray(value)) {
@@ -231,6 +231,44 @@ const api = new Hono<{ Bindings: Env }>()
     await newsRuntime.refreshOnce("api-manual");
     
     return c.json({ ok: true, message: "Refresh cycle completed" });
+  })
+  .get('/live-news/reprocess-stored', async (c) => {
+    const env = parseEnv(c.env);
+    const { db, config } = await getServices(env);
+    const logger = createLogger("api-reprocess");
+
+    console.log("[API] Manual news re-processing triggered");
+
+    const runner = createNewsCollectionRunner({
+      ...config,
+      database: db,
+      onNewsEvent: () => {} // No-op, we just want to update the DB
+    });
+
+    if (!runner) {
+      return c.json({ ok: false, error: "News collector is disabled" }, 400);
+    }
+
+    const allEvents = await db.news._getAllRaw();
+    console.log(`[API] Reprocessing ${allEvents.length} events`);
+
+    let processedCount = 0;
+    for (const stored of allEvents) {
+      const collected = {
+        event: stored,
+        rawEvent: (stored as any).rawPayload,
+        signals: (stored as any).signals?.map((s: any) => ({ normalized: s, raw: s.rawPayload })) || [],
+        primarySignalUrl: (stored as any).primarySignalUrl,
+        primarySourceName: (stored as any).primarySourceName
+      };
+
+      const result = await runner.processOneCollectedEvent(collected as any, true);
+      if (result) {
+        processedCount++;
+      }
+    }
+
+    return c.json({ ok: true, total: allEvents.length, reprocessed: processedCount });
   })
   .get('/boundary-details', async (c) => {
     const env = parseEnv(c.env);

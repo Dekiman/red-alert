@@ -72,4 +72,9 @@ export interface NewsRepository {
    * Saves the backoff state for a news provider.
    */
   setProviderBackoff(providerName: string, state: { backoffUntilMs: number; rateLimitCount: number; transientErrorCount: number }): Promise<void>;
+
+  /**
+   * Internal method to retrieve all raw news events.
+   */
+  _getAllRaw(): Promise<NewsEvent[]>;
 }

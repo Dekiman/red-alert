@@ -1,4 +1,6 @@
-import { executeNewsCollectionPipeline } from "./collector/runtime.js";
+import { executeNewsCollectionPipeline, createNewsCollectionRunner } from "./collector/runtime.js";
+
+export { createNewsCollectionRunner };
 
 export function createNewsRuntime(options) {
   const {

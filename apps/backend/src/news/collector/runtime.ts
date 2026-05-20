@@ -195,131 +195,152 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
     logger: newsLogger
   });
 
-  function getEventVersion(event: any) {
-    return `${event.updatedAtIso}|${event.signalCount}|${Number(event.isActive)}|${event.title}`;
-  }
-
-  function eventPassesSourceFilter(event: any) {
-    if (includeSourceTypesSet.size === 0) {
-      return true;
-    }
-
-    const sourceTypes = Array.isArray(event?.sourceTypes)
-      ? event.sourceTypes
-      : String(event?.sourceTypesRaw ?? "")
-          .split(",")
-          .map((part) => part.trim())
-          .filter(Boolean);
-    if (sourceTypes.length === 0) {
-      return true;
-    }
-
-    const normalizedSourceTypes = sourceTypes
-      .map((sourceType) => normalizeSourceTypeValue(sourceType))
-      .filter(Boolean);
-    if (normalizedSourceTypes.length === 0) {
-      return true;
-    }
-
-    const weatherSourceTypesSet = new Set(
-      WEATHER_SOURCE_TYPE_VALUES.map((sourceType) => normalizeSourceTypeValue(sourceType))
-    );
-
-    if (
-      isWeatherNewsEvent(event) &&
-      !Array.from(weatherSourceTypesSet).some((sourceType) => includeSourceTypesSet.has(sourceType))
-    ) {
-      return false;
-    }
-
-    return normalizedSourceTypes.some((sourceType) => includeSourceTypesSet.has(sourceType));
-  }
-
-  async function processOneCollectedEvent(collected: ProviderCollectedEvent) {
-    const event = collected?.event;
-    if (!event?.eventId) return null;
-    if (!includeWeatherEvents && isWeatherNewsEvent(event)) return null;
-    if (englishOnly && !isEnglishNewsCandidate({
-      title: event?.title,
-      summary: event?.summary,
-      sourceLanguage: resolveNewsSourceLanguage(event, collected.rawEvent)
-    })) return null;
-    if (!eventPassesSourceFilter(event)) return null;
-
-    const storedEvent = await database.news.getEvent(event.eventId);
-    const incomingVersion = getEventVersion(event);
-    const storedVersion = storedEvent ? getEventVersion(storedEvent) : null;
-
-    if (storedVersion === incomingVersion) {
-      return null;
-    }
-
-    // Geocoding enrichment layer
-    if (event.lat == null || event.lng == null) {
-      let resolvedCentroid = null;
-      let matchedCountryName = null;
-
-      // 1. Try structured country field first (e.g. from GDELT sourcecountry)
-      if (event.country) {
-        resolvedCentroid = resolveCountryCentroid(event.country);
-        if (resolvedCentroid) matchedCountryName = event.country;
-      }
-
-      // 2. Fallback to title/summary text extraction
-      if (!resolvedCentroid) {
-        const textToSearch = `${event.title || ""} ${event.summary || ""}`;
-        const extracted = extractCountryCentroidFromText(textToSearch);
-        if (extracted) {
-          resolvedCentroid = { lat: extracted.lat, lng: extracted.lng };
-          matchedCountryName = extracted.countryName;
-        }
-      }
-
-      if (resolvedCentroid) {
-        event.lat = resolvedCentroid.lat;
-        event.lng = resolvedCentroid.lng;
-        // Optionally update the country field if we found it via text and it was null
-        if (!event.country && matchedCountryName) {
-          event.country = matchedCountryName;
-        }
-      }
-    }
-
-    console.log(`[CollectionPipeline] Event ${event.eventId} changed or is new. Stored version: ${storedVersion}, Incoming version: ${incomingVersion}`);
-
-    const normalizedPairs = (Array.isArray(collected.signals) ? collected.signals : [])
-      .filter((pair) => pair && pair.normalized && pair.normalized.signalId)
-      .slice(0, Math.max(1, maxSignalsPerEvent));
-    
-    const normalizedSignals = normalizedPairs.map((pair) => pair.normalized);
-
-    const primarySignalUrl = normalizedSignals[0]?.url ?? collected.primarySignalUrl ?? null;
-    const primarySourceName = normalizedSignals[0]?.sourceName ?? collected.primarySourceName ?? null;
-
-    // Save event with URL fields so they persist to KV
-    await database.news.saveEvent({ ...event, primarySignalUrl, primarySourceName } as any, collected.rawEvent);
-
-    if (normalizedSignals.length > 0) {
-      await database.news.saveSignals(
-        event.eventId,
-        normalizedSignals,
-        normalizedPairs.map((pair) => pair.raw)
+  return {
+    providers,
+    async processOneCollectedEvent(collected: ProviderCollectedEvent, skipVersionCheck = false) {
+      const event = collected?.event;
+      if (!event?.eventId) return null;
+      if (!includeWeatherEvents && isWeatherNewsEvent(event)) return null;
+      if (englishOnly && !isEnglishNewsCandidate({
+        title: event?.title,
+        summary: event?.summary,
+        sourceLanguage: resolveNewsSourceLanguage(event, collected.rawEvent)
+      })) return null;
+      
+      const includeSourceTypesSet = new Set(
+        (Array.isArray(includeSourceTypes) ? includeSourceTypes : [])
+          .map((type) => normalizeSourceTypeValue(type))
+          .filter(Boolean)
       );
-    }
 
-    return {
-      ...event,
-      signals: normalizedSignals,
-      signalsLoaded: normalizedSignals.length > 0,
-      primarySignalUrl,
-      primarySourceName
-    };
-  }
+      function eventPassesSourceFilter(event: any) {
+        if (includeSourceTypesSet.size === 0) {
+          return true;
+        }
+
+        const sourceTypes = Array.isArray(event?.sourceTypes)
+          ? event.sourceTypes
+          : String(event?.sourceTypesRaw ?? "")
+              .split(",")
+              .map((part) => part.trim())
+              .filter(Boolean);
+        if (sourceTypes.length === 0) {
+          return true;
+        }
+
+        const normalizedSourceTypes = sourceTypes
+          .map((sourceType) => normalizeSourceTypeValue(sourceType))
+          .filter(Boolean);
+        if (normalizedSourceTypes.length === 0) {
+          return true;
+        }
+
+        const weatherSourceTypesSet = new Set(
+          WEATHER_SOURCE_TYPE_VALUES.map((sourceType) => normalizeSourceTypeValue(sourceType))
+        );
+
+        if (
+          isWeatherNewsEvent(event) &&
+          !Array.from(weatherSourceTypesSet).some((sourceType) => includeSourceTypesSet.has(sourceType))
+        ) {
+          return false;
+        }
+
+        return normalizedSourceTypes.some((sourceType) => includeSourceTypesSet.has(sourceType));
+      }
+
+      if (!eventPassesSourceFilter(event)) return null;
+
+      const storedEvent = await database.news.getEvent(event.eventId);
+      
+      function getEventVersion(event: any) {
+        return `${event.updatedAtIso}|${event.signalCount}|${Number(event.isActive)}|${event.title}`;
+      }
+
+      const incomingVersion = getEventVersion(event);
+      const storedVersion = storedEvent ? getEventVersion(storedEvent) : null;
+
+      if (!skipVersionCheck && storedVersion === incomingVersion) {
+        return null;
+      }
+
+      // Geocoding enrichment layer
+      if (event.lat == null || event.lng == null) {
+        let resolvedCentroid = null;
+        let matchedCountryName = null;
+
+        // 1. Try structured country field first (e.g. from GDELT sourcecountry)
+        if (event.country) {
+          resolvedCentroid = resolveCountryCentroid(event.country);
+          if (resolvedCentroid) matchedCountryName = event.country;
+        }
+
+        // 2. Fallback to title/summary text extraction
+        if (!resolvedCentroid) {
+          const textToSearch = `${event.title || ""} ${event.summary || ""}`;
+          const extracted = extractCountryCentroidFromText(textToSearch);
+          if (extracted) {
+            resolvedCentroid = { lat: extracted.lat, lng: extracted.lng };
+            matchedCountryName = extracted.countryName;
+          }
+        }
+
+        if (resolvedCentroid) {
+          event.lat = resolvedCentroid.lat;
+          event.lng = resolvedCentroid.lng;
+          // Optionally update the country field if we found it via text and it was null
+          if (!event.country && matchedCountryName) {
+            event.country = matchedCountryName;
+          }
+        }
+      }
+
+      console.log(`[CollectionPipeline] Event ${event.eventId} changed or is new. Stored version: ${storedVersion}, Incoming version: ${incomingVersion}`);
+
+      const normalizedPairs = (Array.isArray(collected.signals) ? collected.signals : [])
+        .filter((pair) => pair && pair.normalized && pair.normalized.signalId)
+        .slice(0, Math.max(1, maxSignalsPerEvent));
+      
+      const normalizedSignals = normalizedPairs.map((pair) => pair.normalized);
+
+      const primarySignalUrl = normalizedSignals[0]?.url ?? collected.primarySignalUrl ?? null;
+      const primarySourceName = normalizedSignals[0]?.sourceName ?? collected.primarySourceName ?? null;
+
+      // Save event with URL fields so they persist to KV
+      await database.news.saveEvent({ ...event, primarySignalUrl, primarySourceName } as any, collected.rawEvent);
+
+      if (normalizedSignals.length > 0) {
+        await database.news.saveSignals(
+          event.eventId,
+          normalizedSignals,
+          normalizedPairs.map((pair) => pair.raw)
+        );
+      }
+
+      return {
+        ...event,
+        signals: normalizedSignals,
+        signalsLoaded: normalizedSignals.length > 0,
+        primarySignalUrl,
+        primarySourceName
+      };
+    }
+  };
+}
+
+export async function executeNewsCollectionPipeline(options: NewsCollectionPipelineOptions, reason: string) {
+  const {
+    database,
+    onNewsEvent
+  } = options;
+
+  const runner = createNewsCollectionRunner(options);
+  if (!runner) return;
 
   try {
     const nowMs = Date.now();
     const settledResults = await Promise.all(
-      providers.map(async (provider) => {
+      runner.providers.map(async (provider) => {
         const backoff = await database.news.getProviderBackoff(provider.name);
         if (backoff && backoff.backoffUntilMs > nowMs) {
           return { providerName: provider.name, events: [], error: null, skipped: true };
@@ -345,12 +366,12 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
           if (error instanceof HttpResponseError && error.status === 429) {
             state.rateLimitCount += 1;
             state.transientErrorCount = 0;
-            const backoffMs = error.retryAfterMs ?? Math.min(Math.max(pollMs, RATE_LIMIT_BASE_BACKOFF_MS) * 2 ** (state.rateLimitCount - 1), RATE_LIMIT_MAX_BACKOFF_MS);
+            const backoffMs = error.retryAfterMs ?? Math.min(Math.max(options.pollMs || 15000, RATE_LIMIT_BASE_BACKOFF_MS) * 2 ** (state.rateLimitCount - 1), RATE_LIMIT_MAX_BACKOFF_MS);
             state.backoffUntilMs = nowMs + backoffMs;
           } else {
             state.transientErrorCount += 1;
             state.rateLimitCount = 0;
-            const backoffMs = Math.min(Math.max(pollMs, TRANSIENT_ERROR_BASE_BACKOFF_MS) * 2 ** (state.transientErrorCount - 1), TRANSIENT_ERROR_MAX_BACKOFF_MS);
+            const backoffMs = Math.min(Math.max(options.pollMs || 15000, TRANSIENT_ERROR_BASE_BACKOFF_MS) * 2 ** (state.transientErrorCount - 1), TRANSIENT_ERROR_MAX_BACKOFF_MS);
             state.backoffUntilMs = nowMs + backoffMs;
           }
 
@@ -375,7 +396,7 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
       if (!eventId || emittedEventIds.has(eventId)) continue;
       emittedEventIds.add(eventId);
 
-      const processedEvent = await processOneCollectedEvent(collected);
+      const processedEvent = await runner.processOneCollectedEvent(collected);
       if (processedEvent) {
         emitted++;
         onNewsEvent(processedEvent);
@@ -387,3 +408,53 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
     newsLogger.error("osint collection pipeline failed", { reason, error: error?.message });
   }
 }
+
+export function createNewsCollectionRunner(options: NewsCollectionPipelineOptions) {
+  const {
+    enabled = true,
+    englishOnly = true,
+    includeWeatherEvents = false,
+    pollMs = 15000,
+    fetchTimeoutMs = 10000,
+    maxSignalsPerEvent = 3,
+    includeSourceTypes = includeWeatherEvents
+      ? [
+          "gdacs",
+          "gdelt",
+          "usgs",
+          "nws",
+          "weather_canada",
+          "meteoalarm",
+          "official",
+          "osint",
+          "news",
+          "disaster",
+          "earthquake",
+          "weather",
+          "warning"
+        ]
+      : ["gdacs", "gdelt", "usgs", "official", "osint", "news", "disaster", "earthquake"],
+    providerNames = includeWeatherEvents
+      ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm", "bbc_rss", "the_war_zone", "defense_blog", "un_news"]
+      : ["gdacs", "gdelt", "usgs", "bbc_rss", "the_war_zone", "defense_blog", "un_news"],
+    maxEventsPerProvider = 80,
+    gdacsApiUrl,
+    gdacsLookbackDays,
+    usgsApiUrl,
+    gdeltApiUrl,
+    gdeltQuery,
+    gdeltMaxRecords,
+    nwsApiUrl,
+    weatherCanadaApiUrl,
+    meteoalarmApiUrl,
+    bbcRssApiUrl,
+    twzApiUrl,
+    defenseBlogApiUrl,
+    unNewsApiUrl,
+    database,
+    onNewsEvent
+  } = options;
+
+  if (!enabled) {
+    return null;
+  }
