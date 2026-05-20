@@ -531,72 +531,56 @@ export function AutoGeoBoundaryLayer(props: {
       });
   }, []);
 
-  const handlePointerMove = (e: any) => {
-    if (!topology) return;
+  const getCountryAtPoint = (point: Vector3, camera: THREE.Camera) => {
+    if (!topology) return null;
 
-    const distance = e.camera.position.length();
-    // "More than halfway zoomed in" condition: distance < 5.7 (range 1.4 to 10.0)
-    if (distance > 5.7) {
-      if (activeCountry !== null) {
-        setActiveCountry(null);
-        onHover?.(null);
-      }
-      return;
+    const distance = camera.position.length();
+    // Allow selection up to 80% zoomed out
+    if (distance > 8.0) {
+      return null;
     }
 
     // Get the lat/lng of the intersection point
     // We need to account for globe rotation
     const rotationY = getRealTimeEarthRotation(date);
-    const hitLatLng = vector3ToLatLng(e.point);
+    const hitLatLng = vector3ToLatLng(point);
 
     // local_lng = world_lng - rotation_y
     const localLng = wrapLongitude(hitLatLng.lng - MathUtils.radToDeg(rotationY));
     const localLat = hitLatLng.lat;
 
     // Find country
-    let foundCountry: string | null = null;
     for (const feature of topology) {
       const geometry = feature.geometry;
       if (!geometry) continue;
 
       if (geometry.type === "Polygon") {
         if (isPointInPolygon(localLng, localLat, geometry.coordinates)) {
-          foundCountry = feature.properties.name;
-          break;
+          return feature.properties.name as string;
         }
       } else if (geometry.type === "MultiPolygon") {
-        let insideMulti = false;
         for (const polyCoords of geometry.coordinates) {
           if (isPointInPolygon(localLng, localLat, polyCoords)) {
-            insideMulti = true;
-            break;
+            return feature.properties.name as string;
           }
-        }
-        if (insideMulti) {
-          foundCountry = feature.properties.name;
-          break;
         }
       }
     }
+    return null;
+  };
 
+  const handlePointerMove = (e: any) => {
+    const foundCountry = getCountryAtPoint(e.point, e.camera);
     if (foundCountry !== activeCountry) {
       setActiveCountry(foundCountry);
       onHover?.(foundCountry);
     }
   };
 
-  const handlePointerDown = (e: any) => {
+  const handleClick = (e: any) => {
     e.stopPropagation();
-    
-    // On mobile/touch devices, we need to ensure the country is detected and selected
-    // since onPointerMove might not have triggered accurately before the tap.
-    if (!activeCountry) {
-      handlePointerMove(e);
-    }
-    
-    if (activeCountry) {
-      onSelect?.(activeCountry);
-    }
+    const foundCountry = getCountryAtPoint(e.point, e.camera);
+    onSelect?.(foundCountry);
   };
 
   const handlePointerOut = () => {
@@ -609,7 +593,7 @@ export function AutoGeoBoundaryLayer(props: {
       {/* Invisible raycasting mesh */}
       <mesh 
         onPointerMove={handlePointerMove}
-        onPointerDown={handlePointerDown}
+        onClick={handleClick}
         onPointerOut={handlePointerOut}
       >
         <sphereGeometry args={[radius, 64, 64]} />
