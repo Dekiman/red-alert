@@ -82,6 +82,87 @@ function parseRetryAfterHeader(value: string | null) {
 
 export async function executeNewsCollectionPipeline(options: NewsCollectionPipelineOptions, reason: string) {
   const {
+    database,
+    onNewsEvent
+  } = options;
+
+  const runner = createNewsCollectionRunner(options);
+  if (!runner) return;
+
+  try {
+    const nowMs = Date.now();
+    const settledResults = await Promise.all(
+      runner.providers.map(async (provider) => {
+        const backoff = await database.news.getProviderBackoff(provider.name);
+        if (backoff && backoff.backoffUntilMs > nowMs) {
+          return { providerName: provider.name, events: [], error: null, skipped: true };
+        }
+
+        try {
+          console.log(`[CollectionPipeline] Fetching from ${provider.name}`);
+          const events = await provider.fetchEvents();
+          console.log(`[CollectionPipeline] Provider ${provider.name} returned ${events.length} events`);
+          
+          await database.news.setProviderBackoff(provider.name, {
+            backoffUntilMs: provider.throttleMs ? nowMs + provider.throttleMs : 0,
+            rateLimitCount: 0,
+            transientErrorCount: 0
+          });
+
+          return { providerName: provider.name, events, error: null };
+        } catch (error) {
+          console.error(`[CollectionPipeline] Provider ${provider.name} failed:`, error);
+          
+          const state = backoff || { backoffUntilMs: 0, rateLimitCount: 0, transientErrorCount: 0 };
+          
+          if (error instanceof HttpResponseError && error.status === 429) {
+            state.rateLimitCount += 1;
+            state.transientErrorCount = 0;
+            const backoffMs = error.retryAfterMs ?? Math.min(Math.max(options.pollMs || 15000, RATE_LIMIT_BASE_BACKOFF_MS) * 2 ** (state.rateLimitCount - 1), RATE_LIMIT_MAX_BACKOFF_MS);
+            state.backoffUntilMs = nowMs + backoffMs;
+          } else {
+            state.transientErrorCount += 1;
+            state.rateLimitCount = 0;
+            const backoffMs = Math.min(Math.max(options.pollMs || 15000, TRANSIENT_ERROR_BASE_BACKOFF_MS) * 2 ** (state.transientErrorCount - 1), TRANSIENT_ERROR_MAX_BACKOFF_MS);
+            state.backoffUntilMs = nowMs + backoffMs;
+          }
+
+          await database.news.setProviderBackoff(provider.name, state);
+          return { providerName: provider.name, events: [], error };
+        }
+      })
+    );
+
+    const mergedEvents: ProviderCollectedEvent[] = [];
+    for (const res of settledResults) {
+      if (!res.error) mergedEvents.push(...res.events);
+    }
+
+    mergedEvents.sort((a, b) => String(b?.event?.updatedAtIso ?? "").localeCompare(String(a?.event?.updatedAtIso ?? "")));
+
+    const emittedEventIds = new Set<string>();
+    let emitted = 0;
+    
+    for (const collected of mergedEvents) {
+      const eventId = String(collected?.event?.eventId ?? "").trim();
+      if (!eventId || emittedEventIds.has(eventId)) continue;
+      emittedEventIds.add(eventId);
+
+      const processedEvent = await runner.processOneCollectedEvent(collected);
+      if (processedEvent) {
+        emitted++;
+        onNewsEvent(processedEvent);
+      }
+    }
+
+    console.log(`[CollectionPipeline] Process complete. Reason: ${reason}, Events seen: ${mergedEvents.length}, Emitted: ${emitted}`);
+  } catch (error: any) {
+    newsLogger.error("osint collection pipeline failed", { reason, error: error?.message });
+  }
+}
+
+export function createNewsCollectionRunner(options: NewsCollectionPipelineOptions) {
+  const {
     enabled = true,
     englishOnly = true,
     includeWeatherEvents = false,
@@ -127,14 +208,8 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
   } = options;
 
   if (!enabled) {
-    return;
+    return null;
   }
-
-  const includeSourceTypesSet = new Set(
-    (Array.isArray(includeSourceTypes) ? includeSourceTypes : [])
-      .map((type) => normalizeSourceTypeValue(type))
-      .filter(Boolean)
-  );
 
   async function fetchWithTimeout(url: string, acceptHeader: string) {
     const controller = new AbortController();
@@ -327,134 +402,3 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
     }
   };
 }
-
-export async function executeNewsCollectionPipeline(options: NewsCollectionPipelineOptions, reason: string) {
-  const {
-    database,
-    onNewsEvent
-  } = options;
-
-  const runner = createNewsCollectionRunner(options);
-  if (!runner) return;
-
-  try {
-    const nowMs = Date.now();
-    const settledResults = await Promise.all(
-      runner.providers.map(async (provider) => {
-        const backoff = await database.news.getProviderBackoff(provider.name);
-        if (backoff && backoff.backoffUntilMs > nowMs) {
-          return { providerName: provider.name, events: [], error: null, skipped: true };
-        }
-
-        try {
-          console.log(`[CollectionPipeline] Fetching from ${provider.name}`);
-          const events = await provider.fetchEvents();
-          console.log(`[CollectionPipeline] Provider ${provider.name} returned ${events.length} events`);
-          
-          await database.news.setProviderBackoff(provider.name, {
-            backoffUntilMs: provider.throttleMs ? nowMs + provider.throttleMs : 0,
-            rateLimitCount: 0,
-            transientErrorCount: 0
-          });
-
-          return { providerName: provider.name, events, error: null };
-        } catch (error) {
-          console.error(`[CollectionPipeline] Provider ${provider.name} failed:`, error);
-          
-          const state = backoff || { backoffUntilMs: 0, rateLimitCount: 0, transientErrorCount: 0 };
-          
-          if (error instanceof HttpResponseError && error.status === 429) {
-            state.rateLimitCount += 1;
-            state.transientErrorCount = 0;
-            const backoffMs = error.retryAfterMs ?? Math.min(Math.max(options.pollMs || 15000, RATE_LIMIT_BASE_BACKOFF_MS) * 2 ** (state.rateLimitCount - 1), RATE_LIMIT_MAX_BACKOFF_MS);
-            state.backoffUntilMs = nowMs + backoffMs;
-          } else {
-            state.transientErrorCount += 1;
-            state.rateLimitCount = 0;
-            const backoffMs = Math.min(Math.max(options.pollMs || 15000, TRANSIENT_ERROR_BASE_BACKOFF_MS) * 2 ** (state.transientErrorCount - 1), TRANSIENT_ERROR_MAX_BACKOFF_MS);
-            state.backoffUntilMs = nowMs + backoffMs;
-          }
-
-          await database.news.setProviderBackoff(provider.name, state);
-          return { providerName: provider.name, events: [], error };
-        }
-      })
-    );
-
-    const mergedEvents: ProviderCollectedEvent[] = [];
-    for (const res of settledResults) {
-      if (!res.error) mergedEvents.push(...res.events);
-    }
-
-    mergedEvents.sort((a, b) => String(b?.event?.updatedAtIso ?? "").localeCompare(String(a?.event?.updatedAtIso ?? "")));
-
-    const emittedEventIds = new Set<string>();
-    let emitted = 0;
-    
-    for (const collected of mergedEvents) {
-      const eventId = String(collected?.event?.eventId ?? "").trim();
-      if (!eventId || emittedEventIds.has(eventId)) continue;
-      emittedEventIds.add(eventId);
-
-      const processedEvent = await runner.processOneCollectedEvent(collected);
-      if (processedEvent) {
-        emitted++;
-        onNewsEvent(processedEvent);
-      }
-    }
-
-    console.log(`[CollectionPipeline] Process complete. Reason: ${reason}, Events seen: ${mergedEvents.length}, Emitted: ${emitted}`);
-  } catch (error: any) {
-    newsLogger.error("osint collection pipeline failed", { reason, error: error?.message });
-  }
-}
-
-export function createNewsCollectionRunner(options: NewsCollectionPipelineOptions) {
-  const {
-    enabled = true,
-    englishOnly = true,
-    includeWeatherEvents = false,
-    pollMs = 15000,
-    fetchTimeoutMs = 10000,
-    maxSignalsPerEvent = 3,
-    includeSourceTypes = includeWeatherEvents
-      ? [
-          "gdacs",
-          "gdelt",
-          "usgs",
-          "nws",
-          "weather_canada",
-          "meteoalarm",
-          "official",
-          "osint",
-          "news",
-          "disaster",
-          "earthquake",
-          "weather",
-          "warning"
-        ]
-      : ["gdacs", "gdelt", "usgs", "official", "osint", "news", "disaster", "earthquake"],
-    providerNames = includeWeatherEvents
-      ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm", "bbc_rss", "the_war_zone", "defense_blog", "un_news"]
-      : ["gdacs", "gdelt", "usgs", "bbc_rss", "the_war_zone", "defense_blog", "un_news"],
-    maxEventsPerProvider = 80,
-    gdacsApiUrl,
-    gdacsLookbackDays,
-    usgsApiUrl,
-    gdeltApiUrl,
-    gdeltQuery,
-    gdeltMaxRecords,
-    nwsApiUrl,
-    weatherCanadaApiUrl,
-    meteoalarmApiUrl,
-    bbcRssApiUrl,
-    twzApiUrl,
-    defenseBlogApiUrl,
-    unNewsApiUrl,
-    database,
-    onNewsEvent
-  } = options;
-
-  if (!enabled) {
-    return null;
-  }
