@@ -16,10 +16,19 @@ Non-alert, non-news notifications used for system updates, instructions, or broa
 ## Architectural Concepts
 
 ### Locality Map
-The system responsible for resolving location names (Hebrew/English) or IDs to geographic polygons and metadata. It manages the catalog of cities and regions.
+The system responsible for resolving location names (Hebrew/English) or IDs to geographic polygons and metadata for Israel. It retrieves catalogs and maps coordinates using static assets and endpoints from `tzevaadom.co.il`.
 
 ### Collection Pipeline
-A specialized stateless pipeline (within the broader Pipeline concept) responsible for fetching, normalizing, and deduplicating news events from external providers. It uses a read-modify-write pattern with the persistence layer for change detection and persists provider-specific backoff states in KV to ensure rate-limit compliance across isolate restarts.
+A specialized stateless pipeline responsible for fetching, normalizing, and deduplicating news events from external providers (GDACS, GDELT, USGS, NWS, Weather Canada, and Meteoalarm). It uses a read-modify-write pattern with the persistence layer for change detection and persists provider-specific backoff states in KV (`news_provider_backoffs`) to ensure rate-limit compliance across isolate restarts.
+
+### Astronomical Positioning Engine
+An orbital tracking logic that computes subsolar and sublunar points for any given UTC timestamp to position the Sun and Moon in 3D space, casting realistic daylight angles and rendering custom twilight highlights on the rotating Earth.
+
+### Interactive Country Boundary Raycaster
+A 3D hit-detection system that converts screen pointers into geographic coordinates (latitude/longitude), accounts for real-time Earth Y-rotation, matches coordinates against simplified TopoJSON borders, fetches detailed administrative boundaries (ADM2) from `geoboundaries.org` or static caches, and applies country-focused news feed filters.
+
+### Timeline Replay System
+A backend service and frontend control panel that enables backfilling and playing back historical emergency events and news streams, temporarily swapping live socket updates with timestamped database queries.
 
 ### AlertBroadcaster
 A real-time synchronization hub implemented as a Cloudflare Durable Object. It coordinates the "live" state of alerts and news across all connected WebSocket clients.

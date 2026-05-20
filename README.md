@@ -67,12 +67,14 @@ bun --filter backend deploy
 
 ## Features
 
-- **Real-time Synchronization**: Powered by Cloudflare Durable Objects.
+- **Real-time Synchronization**: Powered by Cloudflare Durable Objects managing active WebSocket channels.
 - **High-Fidelity 3D Globe**: 
-  - Real-world UTC-tied rotation and lighting.
-  - Zoom-based Level of Detail (LOD).
-  - Dynamic polygon highlighting for active alerts (Yellow -> Red -> Orange -> Green).
-- **News Aggregation**: Normalized news stream from multiple OSINT sources (GDELT, GDACS, USGS, etc.).
+  - **Astronomical Alignment**: Real-world UTC-tied Earth rotation paired with real-time astronomical solar and lunar coordinate mapping (subsolar and sublunar points) casting twilight and shadow shaders.
+  - **Interactive Country Boundary Raycasting**: Hovering and clicking on the globe computes local coordinates and runs point-in-polygon checks to highlight country borders.
+  - **Detailed Administrative Borders (ADM2)**: Dynamic loading of secondary administrative divisions from `geoboundaries.org` or static pre-simplified caches when a country is hovered/selected.
+  - **Automatic Filters**: Selecting a country on the globe dynamically filters the dashboard's live news feed.
+- **News Aggregation**: Normalized, rate-limit compliant news stream from multiple OSINT/disaster sources including GDELT, GDACS, USGS (earthquakes), NWS (US weather), Weather Canada, and Meteoalarm (European weather).
+- **Timeline Replay**: An interactive slider/timeline interface to rewind, pause, play, or scrub back in time to inspect historical siren states and global news events.
 - **Type Safety**: End-to-end type safety using Zod and TanStack Router.
 
 ## Deployment Targets

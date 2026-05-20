@@ -7,28 +7,23 @@
 -   **Routing**: [TanStack Router](https://tanstack.com/router) (Type-safe)
 -   **Data Fetching**: [TanStack Query](https://tanstack.com/query)
 -   **State Management**: [Zustand](https://github.com/pmndrs/zustand)
--   **3D Rendering**: [`@json-render/react-three-fiber`](https://r3f.docs.pmnd.rs/) (Three.js)
+-   **3D Rendering**: [`@react-three/fiber`](https://r3f.docs.pmnd.rs/) & [`@react-three/drei`](https://github.com/pmndrs/drei) (Three.js)
 -   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
--   **UI Architecture**: `@json-render` (core, react, zustand, shadcn)
+-   **UI Architecture**: `@json-render` (core, react, shadcn) for dynamic UI card representation
 
 ## Application Structure
 
 ### 1. Map Kernel
 Located in `apps/frontend/src/app/map-kernel/`.
--   **`renderer.tsx`**: The main entry point for the 3D globe. It uses `ThreeCanvas` to render a declarative scene specification.
--   **`components.tsx`**: Implementation of R3F components like `Globe`, `BoundaryLayer`, `Marker3D`, and `SunHighlight`.
--   **`catalog.ts`**: Defines the JSON schema for the map components using `@json-render/core`.
--   **`math.ts`**: Utilities for geographic to 3D coordinate conversion (Lat/Lng to Vector3).
+-   **`renderer.tsx`**: The main entry point for the 3D globe, wrapping the canvas, camera controls, ambient light systems, and coordinate raycasters.
+-   **`components.tsx`**: Implementation of R3F components like `Globe`, `BoundaryLayer`, `LocalityBoundaryLayer`, `AutoGeoBoundaryLayer` (raycast interaction), `Marker3D` (live news and active sirens), and `SunHighlight` (twilight daylight rendering).
+-   **`math.ts`**: Utilities for geographic conversions, subsolar and sublunar calculations, and point-in-polygon checks.
 
-### 2. Map Adapter
-Located in `apps/frontend/src/app/map-adapter/`.
--   **`spec-generator.ts`**: Generates a declarative JSON specification for the 3D scene based on the current application state (active alerts, news events).
-
-### 3. Dashboard Stores
+### 2. Dashboard Stores
 Located in `apps/frontend/src/stores/`.
 -   **`useDashboardStore.ts`**: Central Zustand store managing connection state, live alert/news feeds, and UI configuration.
 
-### 4. Real-time Synchronization
+### 3. Real-time Synchronization
 Located in `apps/frontend/src/app/use-dashboard-socket.ts`.
 -   Manages the WebSocket connection to the backend.
 -   Handles incoming real-time payloads and updates the Zustand store and Map Kernel.

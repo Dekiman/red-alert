@@ -35,6 +35,7 @@ Supports multiple providers:
 -   **Meteoalarm**: Weather alerts for Europe.
 -   **USGS**: Earthquake data.
 -   **NWS**: US National Weather Service.
+-   **Weather Canada**: Official environmental warnings for Canada.
 
 ### 4. Polygon State Service
 Located in `apps/backend/src/polygon-state/service.ts`.
@@ -48,6 +49,7 @@ Located in `apps/backend/src/polygon-state/service.ts`.
 -   `GET /api/polygon-states/current`: Current active alert polygons.
 -   `GET /api/polygon-states/replay`: Timeline of polygon states for replay mode.
 -   `GET /api/live-news`: Filterable feed of global news events.
+-   `GET /api/boundary-details`: Resolves and returns ADM1/ADM2 TopoJSON/GeoJSON borders for a country.
 -   `WS /ui-socket`: WebSocket entry point for real-time updates.
 
 ## Cron Triggers

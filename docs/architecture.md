@@ -15,6 +15,10 @@ graph TD
         GDELT[GDELT Project]
         GDACS[GDACS]
         USGS[USGS Earthquake]
+        NWS[US Weather Alerts]
+        Meteo[Meteoalarm Europe]
+        Canada[Weather Canada]
+        GeoBound[geoboundaries.org]
     end
 
     subgraph Backend [Cloudflare Workers]
@@ -32,19 +36,21 @@ graph TD
     Cron -->|Polls| External Providers
     Cron -->|Stores Data| KV
     Cron -->|Notifies| DO
-    Hono -->|Serves API| React
+    Hono -->|Serves API & ADM2 Boundaries| React
+    Hono -->|Queries| GeoBound
     DO <-->|WebSockets| React
     React -->|Renders| Globe
 ```
 
 ## Data Flow
 
-1.  **Collection**: Cloudflare Workers Cron Triggers run periodically to fetch raw data from external providers (Home Front Command for alerts, GDELT/GDACS/USGS for news).
+1.  **Collection**: Cloudflare Workers Cron Triggers run periodically to fetch raw data from external providers (Home Front Command for alerts, GDELT/GDACS/USGS/NWS/Weather Canada/Meteoalarm for news).
 2.  **Normalization**: Raw data is parsed and transformed into standardized domain objects using Shared Schemas (defined in `packages/shared`).
 3.  **Persistence**: Normalized events are stored in Cloudflare KV storage for historical access and backfilling.
-4.  **Broadcast**: New events are pushed to the `AlertBroadcaster` Durable Object.
-5.  **Synchronization**: The Durable Object broadcasts the events via WebSockets to all connected frontend clients.
-6.  **Visualization**: The React frontend receives the events and updates the UI, including the live 3D globe and news feed.
+4.  **Boundary Queries**: When the frontend requests a country's boundaries, Hono handles name normalization, checks KV, fetches the ADM2 shapefiles from `geoboundaries.org` or static caches, and returns them to the map kernel.
+5.  **Broadcast**: New events are pushed to the `AlertBroadcaster` Durable Object.
+6.  **Synchronization**: The Durable Object broadcasts the events via WebSockets to all connected frontend clients.
+7.  **Visualization**: The React frontend receives the events and updates the UI, including the live 3D globe and news feed.
 
 ## Core Components
 

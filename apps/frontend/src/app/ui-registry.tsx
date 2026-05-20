@@ -26,7 +26,7 @@ export const { registry } = defineRegistry(uiCatalog, {
 
       return (
         <Card className="group relative border border-white/10 bg-black/40 p-0 transition-colors duration-200 hover:border-red-500/30 min-h-[140px]">
-          <div className="flex flex-col gap-4 p-4 h-full">
+          <div className="flex flex-col gap-4 p-4 flex-1">
             <div className="flex justify-between items-baseline gap-2">
               <h4 className="text-[13px] font-bold tracking-tight text-red-500 uppercase">
                 {locationCount}&nbsp;Location{locationCount === 1 ? "" : "s"}
@@ -87,7 +87,7 @@ export const { registry } = defineRegistry(uiCatalog, {
 
       return (
         <Card className="group relative border border-white/10 bg-black/40 p-0 transition-colors duration-200 hover:border-emerald-500/30 min-h-[180px]">
-          <div className="flex flex-col gap-3 p-4 h-full">
+          <div className="flex flex-col gap-3 p-4 flex-1">
             <div className="flex justify-between items-center gap-2 mb-1">
               <span className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-500">
                 {(newsEvent.category || "News").toUpperCase()}
