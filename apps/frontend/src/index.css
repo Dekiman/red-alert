@@ -649,6 +649,7 @@
         overflow-y: auto;
         padding-right: 8px;
         display: grid;
+        grid-auto-rows: min-content;
         gap: 8px;
       }
 
