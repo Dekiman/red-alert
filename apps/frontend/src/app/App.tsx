@@ -14,7 +14,7 @@ import type {
 } from "./contracts.js";
 import { sanitizeNewsEventLocationFields } from "./news-event-location.js";
 import { categorizeNewsTitleType } from "./news-categorizer.js";
-import { formatNewsTime, formatTime, hasHebrew } from "./text-utils.js";
+import { formatNewsTime, formatTime, hasHebrew, getCanonicalCountryName } from "./text-utils.js";
 import { getUiSocketPath } from "./ui-config.js";
 import { useDashboardSocket } from "./use-dashboard-socket.js";
 import { useDashboardStore } from "../stores/useDashboardStore.js";
@@ -31,15 +31,10 @@ const GLOBE_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const LIVE_NEWS_CLOCK_TICK_MS = 60_000;
 const ALERT_PANEL_LIMIT = 150;
 const NEWS_TYPE_ORDER = [
-  "Incident Ongoing",
-  "Public Advisory",
-  "Weather Alert",
-  "Casualties Update",
-  "Investigation",
-  "Recovery",
-  "Political Update",
-  "Incident Ended",
-  "General Update"
+  "News",
+  "Earthquake",
+  "Weather",
+  "Other"
 ];
 
 const NEWS_SEVERITY_LABELS: Record<number, string> = {
@@ -428,7 +423,7 @@ export function App() {
   const [isNewsFeedCollapsed, setIsNewsFeedCollapsed] = useState(false);
   const [isAlertsPanelCollapsed, setIsAlertsPanelCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<"globe" | "news" | "alerts">("globe");
-  const [selectedNewsTypes, setSelectedNewsTypes] = useState<string[]>([]);
+  const [selectedNewsTypes, setSelectedNewsTypes] = useState<string[]>(["News"]);
   const [selectedNewsSeverities, setSelectedNewsSeverities] = useState<number[]>([]);
   const [isNewsFilterOpen, setIsNewsFilterOpen] = useState(false);
   const [historicalNewsEvents, setHistoricalNewsEvents] = useState<NewsEventPayload[]>([]);
@@ -541,7 +536,12 @@ export function App() {
 
   const sourceNewsEventsForFilters = useMemo(() => {
     if (!selectedCountry) return rawSourceNewsEvents;
-    return rawSourceNewsEvents.filter((newsEvent) => newsEvent.country === selectedCountry);
+    const targetCountry = getCanonicalCountryName(selectedCountry);
+    return rawSourceNewsEvents.filter((newsEvent) => {
+      const countryMatch = getCanonicalCountryName(newsEvent.country) === targetCountry;
+      const locationMatch = getCanonicalCountryName(newsEvent.locationName) === targetCountry;
+      return countryMatch || locationMatch;
+    });
   }, [rawSourceNewsEvents, selectedCountry]);
 
   const matchingNewsEvents = useMemo(
@@ -560,7 +560,10 @@ export function App() {
         .filter(
           (newsEvent) =>
             matchesNewsTypeFilter(newsEvent, selectedNewsTypes) &&
-            matchesNewsSeverityFilter(newsEvent, selectedNewsSeverities)
+            matchesNewsSeverityFilter(newsEvent, selectedNewsSeverities) &&
+            newsEvent.lat != null &&
+            newsEvent.lng != null &&
+            !(newsEvent.lat === 0 && newsEvent.lng === 0)
         )
         .slice(0, 100),
     [rawSourceNewsEvents, selectedNewsSeverities, selectedNewsTypes]

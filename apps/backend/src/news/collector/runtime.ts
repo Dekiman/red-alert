@@ -5,6 +5,7 @@ import { normalizeSourceTypeValue } from "./normalizers.js";
 import { createOsintProviders } from "./providers.js";
 import type { ProviderCollectedEvent, ProviderSignalPair } from "./provider-types.js";
 import type { NewsRepository } from "../../persistence/index.js";
+import { resolveCountryCentroid, extractCountryCentroidFromText } from "../../../../../packages/shared/src/country-centroids.js";
 
 const newsLogger = createLogger("news");
 const WEATHER_SOURCE_TYPE_VALUES = ["weather", "nws", "weather_canada", "meteoalarm"];
@@ -253,15 +254,51 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
       return null;
     }
 
-    console.log(`[CollectionPipeline] Event ${event.eventId} changed or is new. Stored version: ${storedVersion}, Incoming version: ${incomingVersion}`);
+    // Geocoding enrichment layer
+    if (event.lat == null || event.lng == null) {
+      let resolvedCentroid = null;
+      let matchedCountryName = null;
 
-    await database.news.saveEvent(event, collected.rawEvent);
+      // 1. Try structured country field first (e.g. from GDELT sourcecountry)
+      if (event.country) {
+        resolvedCentroid = resolveCountryCentroid(event.country);
+        if (resolvedCentroid) matchedCountryName = event.country;
+      }
+
+      // 2. Fallback to title/summary text extraction
+      if (!resolvedCentroid) {
+        const textToSearch = `${event.title || ""} ${event.summary || ""}`;
+        const extracted = extractCountryCentroidFromText(textToSearch);
+        if (extracted) {
+          resolvedCentroid = { lat: extracted.lat, lng: extracted.lng };
+          matchedCountryName = extracted.countryName;
+        }
+      }
+
+      if (resolvedCentroid) {
+        event.lat = resolvedCentroid.lat;
+        event.lng = resolvedCentroid.lng;
+        // Optionally update the country field if we found it via text and it was null
+        if (!event.country && matchedCountryName) {
+          event.country = matchedCountryName;
+        }
+      }
+    }
+
+    console.log(`[CollectionPipeline] Event ${event.eventId} changed or is new. Stored version: ${storedVersion}, Incoming version: ${incomingVersion}`);
 
     const normalizedPairs = (Array.isArray(collected.signals) ? collected.signals : [])
       .filter((pair) => pair && pair.normalized && pair.normalized.signalId)
       .slice(0, Math.max(1, maxSignalsPerEvent));
     
     const normalizedSignals = normalizedPairs.map((pair) => pair.normalized);
+
+    const primarySignalUrl = normalizedSignals[0]?.url ?? collected.primarySignalUrl ?? null;
+    const primarySourceName = normalizedSignals[0]?.sourceName ?? collected.primarySourceName ?? null;
+
+    // Save event with URL fields so they persist to KV
+    await database.news.saveEvent({ ...event, primarySignalUrl, primarySourceName } as any, collected.rawEvent);
+
     if (normalizedSignals.length > 0) {
       await database.news.saveSignals(
         event.eventId,
@@ -269,9 +306,6 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
         normalizedPairs.map((pair) => pair.raw)
       );
     }
-
-    const primarySignalUrl = normalizedSignals[0]?.url ?? collected.primarySignalUrl ?? null;
-    const primarySourceName = normalizedSignals[0]?.sourceName ?? collected.primarySourceName ?? null;
 
     return {
       ...event,
