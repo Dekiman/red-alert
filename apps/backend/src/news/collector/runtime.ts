@@ -272,7 +272,8 @@ export function createNewsCollectionRunner(options: NewsCollectionPipelineOption
 
   return {
     providers,
-    async processOneCollectedEvent(collected: ProviderCollectedEvent, skipVersionCheck = false) {
+    async processOneCollectedEvent(collected: ProviderCollectedEvent, options: { skipVersionCheck?: boolean, skipSave?: boolean, storedEvent?: any } = {}) {
+      const { skipVersionCheck = false, skipSave = false, storedEvent: providedStoredEvent } = options;
       const event = collected?.event;
       if (!event?.eventId) return null;
       if (!includeWeatherEvents && isWeatherNewsEvent(event)) return null;
@@ -326,7 +327,7 @@ export function createNewsCollectionRunner(options: NewsCollectionPipelineOption
 
       if (!eventPassesSourceFilter(event)) return null;
 
-      const storedEvent = await database.news.getEvent(event.eventId);
+      const storedEvent = providedStoredEvent !== undefined ? providedStoredEvent : await database.news.getEvent(event.eventId);
       
       function getEventVersion(event: any) {
         return `${event.updatedAtIso}|${event.signalCount}|${Number(event.isActive)}|${event.title}`;
@@ -382,14 +383,16 @@ export function createNewsCollectionRunner(options: NewsCollectionPipelineOption
       const primarySourceName = normalizedSignals[0]?.sourceName ?? collected.primarySourceName ?? null;
 
       // Save event with URL fields so they persist to KV
-      await database.news.saveEvent({ ...event, primarySignalUrl, primarySourceName } as any, collected.rawEvent);
+      if (!skipSave) {
+        await database.news.saveEvent({ ...event, primarySignalUrl, primarySourceName } as any, collected.rawEvent);
 
-      if (normalizedSignals.length > 0) {
-        await database.news.saveSignals(
-          event.eventId,
-          normalizedSignals,
-          normalizedPairs.map((pair) => pair.raw)
-        );
+        if (normalizedSignals.length > 0) {
+          await database.news.saveSignals(
+            event.eventId,
+            normalizedSignals,
+            normalizedPairs.map((pair) => pair.raw)
+          );
+        }
       }
 
       return {

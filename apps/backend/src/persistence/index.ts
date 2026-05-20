@@ -54,6 +54,11 @@ export interface NewsRepository {
   saveEvent(normalizedEvent: NewsEvent, rawPayload: unknown): Promise<{ changed: boolean }>;
 
   /**
+   * Saves or updates a batch of news events efficiently.
+   */
+  saveEventsBatch(updates: Array<{ normalizedEvent: NewsEvent, rawPayload: unknown }>): Promise<{ changedCount: number }>;
+
+  /**
    * Saves new signals for an existing event.
    */
   saveSignals(eventId: string, normalizedSignals: any[], rawSignals: unknown[]): Promise<{ inserted: number }>;

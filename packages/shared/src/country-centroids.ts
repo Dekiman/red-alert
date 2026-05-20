@@ -303,6 +303,10 @@ export function resolveCountryCentroid(countryName: string): { lat: number; lng:
   return partialMatch ? partialMatch[1] : null;
 }
 
+// Pre-compiled regexes and sorted names for performance
+const SHORT_NAME_REGEXES: Record<string, RegExp> = {};
+const SORTED_COUNTRY_NAMES = Object.keys(COUNTRY_CENTROIDS).sort((a, b) => b.length - a.length);
+
 /**
  * Parses a title or text to extract the first matched country name and return its centroid.
  */
@@ -314,8 +318,10 @@ export function extractCountryCentroidFromText(text: string): { lat: number; lng
   for (const [alias, real] of Object.entries(COUNTRY_ALIASES)) {
     // Only match word boundaries for short aliases to avoid false positives (e.g. "uk" in "ukulele")
     if (alias.length <= 3) {
-      const regex = new RegExp(`\\b${alias}\\b`);
-      if (regex.test(lowerText)) {
+      if (!SHORT_NAME_REGEXES[alias]) {
+        SHORT_NAME_REGEXES[alias] = new RegExp(`\\b${alias}\\b`, "i");
+      }
+      if (SHORT_NAME_REGEXES[alias].test(lowerText)) {
         const centroid = resolveCountryCentroid(real);
         if (centroid) return { ...centroid, countryName: real };
       }
@@ -325,15 +331,16 @@ export function extractCountryCentroidFromText(text: string): { lat: number; lng
     }
   }
 
-  // Search primary names, sorting by length descending to match "United Kingdom" before "United"
-  const allCountries = Object.keys(COUNTRY_CENTROIDS).sort((a, b) => b.length - a.length);
-  for (const country of allCountries) {
+  // Search primary names, using pre-sorted list (longest first)
+  for (const country of SORTED_COUNTRY_NAMES) {
     const lowerCountry = country.toLowerCase();
     
     // Skip extremely short country names that might false positive inside other words
     if (lowerCountry.length <= 3) {
-      const regex = new RegExp(`\\b${lowerCountry}\\b`);
-      if (regex.test(lowerText)) {
+      if (!SHORT_NAME_REGEXES[lowerCountry]) {
+        SHORT_NAME_REGEXES[lowerCountry] = new RegExp(`\\b${lowerCountry}\\b`, "i");
+      }
+      if (SHORT_NAME_REGEXES[lowerCountry].test(lowerText)) {
          return { ...COUNTRY_CENTROIDS[country], countryName: country };
       }
     } else if (lowerText.includes(lowerCountry)) {

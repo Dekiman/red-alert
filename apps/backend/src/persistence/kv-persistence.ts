@@ -67,30 +67,44 @@ export function createKVPersistence(options: KVPersistenceOptions): Persistence 
     },
 
     async saveEvent(normalizedEvent, rawPayload) {
-      console.log(`[KVPersistence] Saving news event: ${normalizedEvent.eventId}`);
-      const events = await this._getAllRaw();
-      const index = events.findIndex((e: any) => e.eventId === normalizedEvent.eventId);
-      const existing = events[index] as any;
-      const entry = {
-        ...normalizedEvent,
-        rawPayload,
-        signals: existing?.signals ?? [],
-        // Preserve URL fields if the incoming event has them; fall back to existing
-        primarySignalUrl: (normalizedEvent as any).primarySignalUrl ?? existing?.primarySignalUrl ?? null,
-        primarySourceName: (normalizedEvent as any).primarySourceName ?? existing?.primarySourceName ?? null,
-      };
+      const { changedCount } = await this.saveEventsBatch([{ normalizedEvent, rawPayload }]);
+      return { changed: changedCount > 0 };
+    },
 
-      if (index >= 0) {
-        events[index] = { ...existing, ...entry };
-      } else {
-        events.unshift(entry as any);
+    async saveEventsBatch(updates) {
+      if (updates.length === 0) return { changedCount: 0 };
+      
+      console.log(`[KVPersistence] Saving batch of ${updates.length} news events`);
+      const events = await this._getAllRaw();
+      let changedCount = 0;
+
+      for (const update of updates) {
+        const { normalizedEvent, rawPayload } = update;
+        const index = events.findIndex((e: any) => e.eventId === normalizedEvent.eventId);
+        const existing = events[index] as any;
+        
+        const entry = {
+          ...normalizedEvent,
+          rawPayload,
+          signals: existing?.signals ?? [],
+          // Preserve URL fields if the incoming event has them; fall back to existing
+          primarySignalUrl: (normalizedEvent as any).primarySignalUrl ?? existing?.primarySignalUrl ?? null,
+          primarySourceName: (normalizedEvent as any).primarySourceName ?? existing?.primarySourceName ?? null,
+        };
+
+        if (index >= 0) {
+          events[index] = { ...existing, ...entry };
+        } else {
+          events.unshift(entry as any);
+        }
+        changedCount++;
       }
       
       const slice = events.slice(0, maxNewsEvents);
       await kv.put("news_events", JSON.stringify(slice));
-      console.log(`[KVPersistence] Successfully saved news_events to KV. Total count: ${slice.length}`);
+      console.log(`[KVPersistence] Successfully saved news_events batch to KV. Total count: ${slice.length}`);
 
-      return { changed: true };
+      return { changedCount };
     },
 
     async saveSignals(eventId, normalizedSignals, rawSignals) {

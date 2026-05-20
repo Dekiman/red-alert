@@ -236,8 +236,9 @@ const api = new Hono<{ Bindings: Env }>()
     const env = parseEnv(c.env);
     const { db, config } = await getServices(env);
     const logger = createLogger("api-reprocess");
+    const force = c.req.query('force') === 'true';
 
-    console.log("[API] Manual news re-processing triggered");
+    console.log(`[API] Manual news re-processing triggered (force=${force})`);
 
     const runner = createNewsCollectionRunner({
       ...config,
@@ -252,23 +253,34 @@ const api = new Hono<{ Bindings: Env }>()
     const allEvents = await db.news._getAllRaw();
     console.log(`[API] Reprocessing ${allEvents.length} events`);
 
-    let processedCount = 0;
+    const updates: Array<{ normalizedEvent: any, rawPayload: any }> = [];
     for (const stored of allEvents) {
+      const eventToProcess = force ? { ...stored, lat: null, lng: null } : stored;
+      
       const collected = {
-        event: stored,
+        event: eventToProcess,
         rawEvent: (stored as any).rawPayload,
         signals: (stored as any).signals?.map((s: any) => ({ normalized: s, raw: s.rawPayload })) || [],
         primarySignalUrl: (stored as any).primarySignalUrl,
         primarySourceName: (stored as any).primarySourceName
       };
 
-      const result = await runner.processOneCollectedEvent(collected as any, true);
+      const result = await runner.processOneCollectedEvent(collected as any, { 
+        skipVersionCheck: true, 
+        skipSave: true,
+        storedEvent: stored 
+      });
+      
       if (result) {
-        processedCount++;
+        updates.push({ normalizedEvent: result, rawPayload: (stored as any).rawPayload });
       }
     }
 
-    return c.json({ ok: true, total: allEvents.length, reprocessed: processedCount });
+    if (updates.length > 0) {
+      await db.news.saveEventsBatch(updates);
+    }
+
+    return c.json({ ok: true, total: allEvents.length, reprocessed: updates.length });
   })
   .get('/boundary-details', async (c) => {
     const env = parseEnv(c.env);
