@@ -226,13 +226,21 @@ export function Marker3D(props: any) {
   const { lat, lng, radius = 1.2, altitude = 0.012, color = "#ff5837", scale = 1, isPulse = false, showHalo = false, onClick, children } = props;
   const position = useMemo(() => latLngToVector3(lat, lng, radius + altitude), [lat, lng, radius, altitude]);
   
+  const pointerDownPos = useRef({ x: 0, y: 0 });
+
   return (
     <group position={position}>
       <mesh 
         scale={[0.01 * scale, 0.01 * scale, 0.01 * scale]} 
         renderOrder={30}
+        onPointerDown={(e) => {
+          pointerDownPos.current = { x: e.clientX, y: e.clientY };
+        }}
         onClick={(e) => {
           e.stopPropagation();
+          const dx = e.clientX - pointerDownPos.current.x;
+          const dy = e.clientY - pointerDownPos.current.y;
+          if (Math.sqrt(dx * dx + dy * dy) > 5) return;
           onClick?.();
         }}
       >
@@ -570,6 +578,16 @@ export function AutoGeoBoundaryLayer(props: {
     return null;
   };
 
+  const pointerDownPos = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e: any) => {
+    // R3F events wrap native DOM events in `nativeEvent`
+    pointerDownPos.current = { 
+      x: e.nativeEvent?.clientX ?? e.clientX ?? 0, 
+      y: e.nativeEvent?.clientY ?? e.clientY ?? 0 
+    };
+  };
+
   const handlePointerMove = (e: any) => {
     const foundCountry = getCountryAtPoint(e.point, e.camera);
     if (foundCountry !== activeCountry) {
@@ -580,6 +598,18 @@ export function AutoGeoBoundaryLayer(props: {
 
   const handleClick = (e: any) => {
     e.stopPropagation();
+    
+    // Check if the pointer moved significantly since onPointerDown
+    const currentX = e.nativeEvent?.clientX ?? e.clientX ?? 0;
+    const currentY = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+    
+    const dx = currentX - pointerDownPos.current.x;
+    const dy = currentY - pointerDownPos.current.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Allow up to 10 pixels of movement for a "click" (more tolerant)
+    if (distance > 10) return; 
+    
     const foundCountry = getCountryAtPoint(e.point, e.camera);
     onSelect?.(foundCountry);
   };
@@ -594,6 +624,7 @@ export function AutoGeoBoundaryLayer(props: {
       {/* Invisible raycasting mesh */}
       <mesh 
         onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerDown}
         onClick={handleClick}
         onPointerOut={handlePointerOut}
       >
