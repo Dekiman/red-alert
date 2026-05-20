@@ -554,7 +554,17 @@ export function App() {
     [selectedNewsSeverities, selectedNewsTypes, sourceNewsEventsForFilters]
   );
   const filteredNewsEvents = useMemo(() => matchingNewsEvents.slice(0, 100), [matchingNewsEvents]);
-  const globeNewsEvents = filteredNewsEvents;
+  const globeNewsEvents = useMemo(
+    () =>
+      rawSourceNewsEvents
+        .filter(
+          (newsEvent) =>
+            matchesNewsTypeFilter(newsEvent, selectedNewsTypes) &&
+            matchesNewsSeverityFilter(newsEvent, selectedNewsSeverities)
+        )
+        .slice(0, 100),
+    [rawSourceNewsEvents, selectedNewsSeverities, selectedNewsTypes]
+  );
   const newsFilterOptions = useMemo(
     () => buildLocalNewsTypeCounts(sourceNewsEventsForFilters, selectedNewsTypes, selectedNewsSeverities),
     [selectedNewsSeverities, selectedNewsTypes, sourceNewsEventsForFilters]

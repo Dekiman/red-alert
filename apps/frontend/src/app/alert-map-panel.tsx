@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense, useRef } from "react";
 import type { NewsEventPayload, AlertPayload } from "./contracts.js";
 import { formatNewsTime, hasHebrew } from "./text-utils.js";
 
@@ -14,8 +14,15 @@ interface AlertMapPanelProps {
 
 export function AlertMapPanel({ newsEvents, alerts, date, selectedCountry: globalSelectedCountry, onSelectCountry }: AlertMapPanelProps) {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const lastSelectTimeRef = useRef<number>(0);
 
-  const handleSelect = (item: { kind: "news" | "alert"; id: string; payload: any }) => {
+  const handleSelect = (item: { kind: "news" | "alert"; id: string; payload: any } | null) => {
+    console.log("handleSelect called with:", item);
+    lastSelectTimeRef.current = Date.now();
+    if (!item) {
+      setSelectedItem(null);
+      return;
+    }
     setSelectedItem({
       kind: item.kind,
       newsEvent: item.kind === "news" ? item.payload : null,
@@ -24,36 +31,43 @@ export function AlertMapPanel({ newsEvents, alerts, date, selectedCountry: globa
     });
   };
 
+  useEffect(() => {
+    if (!selectedItem) return;
+
+    const handleDocumentClick = (e: MouseEvent) => {
+      const timeDiff = Date.now() - lastSelectTimeRef.current;
+      const target = e.target as HTMLElement;
+      const insideCard = target.closest(".event-bubble-card");
+      console.log("handleDocumentClick target:", target, "timeDiff:", timeDiff, "insideCard:", !!insideCard);
+
+      // If the selection happened extremely recently, ignore the click to avoid instant closure
+      if (timeDiff < 100) {
+        console.log("Ignoring document click: too recent selection");
+        return;
+      }
+
+      // If the click is inside the bubble, ignore it
+      if (insideCard) {
+        console.log("Ignoring document click: inside bubble card");
+        return;
+      }
+
+      // Otherwise, close the bubble and unselect the event
+      console.log("Closing bubble via click outside");
+      setSelectedItem(null);
+    };
+
+    document.addEventListener("click", handleDocumentClick);
+    return () => {
+      document.removeEventListener("click", handleDocumentClick);
+    };
+  }, [selectedItem]);
+
   const selectedNewsEvent = selectedItem?.kind === "news" ? selectedItem.newsEvent : null;
   const selectedAlert = selectedItem?.kind === "alert" ? selectedItem.alert : null;
 
   const eventSelectedCountry = selectedNewsEvent?.country || (selectedAlert ? "Israel" : null);
   const effectiveSelectedCountry = globalSelectedCountry || eventSelectedCountry;
-
-  const selectedTitle =
-    selectedItem?.kind === "news"
-      ? String(selectedNewsEvent?.title ?? "")
-      : selectedItem?.kind === "alert"
-        ? `Red Alert: ${selectedAlert?.locations?.[0] || "Unknown Location"}`
-        : "";
-
-  const selectedSummary =
-    selectedItem?.kind === "news"
-      ? selectedNewsEvent?.summary && selectedNewsEvent.summary !== selectedNewsEvent.title
-        ? String(selectedNewsEvent.summary)
-        : null
-      : selectedItem?.kind === "alert"
-        ? `${selectedAlert?.threat} threat detected at ${selectedAlert?.locationCount} locations.`
-        : null;
-
-  const selectedEyebrow =
-    selectedItem?.kind === "news"
-      ? `${(selectedNewsEvent?.category || "news").toUpperCase()} · ${formatNewsTime(
-          selectedNewsEvent?.updatedAtIso || selectedNewsEvent?.createdAtIso
-        )}`
-      : selectedItem?.kind === "alert"
-        ? `LIVE ALERT · ${selectedAlert?.source}`
-        : "";
 
   return (
     <section className="alert-map alert-map-stage" aria-label="Global threat globe">
@@ -63,6 +77,7 @@ export function AlertMapPanel({ newsEvents, alerts, date, selectedCountry: globa
             alerts={alerts} 
             newsEvents={newsEvents} 
             selectedEventId={selectedItem?.kind === "news" ? selectedItem.newsEvent?.eventId : null}
+            selectedItem={selectedItem}
             selectedCountry={effectiveSelectedCountry}
             onSelect={handleSelect}
             onSelectCountry={onSelectCountry}
@@ -80,36 +95,6 @@ export function AlertMapPanel({ newsEvents, alerts, date, selectedCountry: globa
             Global news
           </span>
         </div>
-        
-        {selectedItem && (
-          <aside className="globe-event-card min-h-[140px]" aria-label="Selected world event">
-            <button
-              type="button"
-              className="globe-event-close"
-              aria-label="Close event details"
-              onClick={() => setSelectedItem(null)}
-            >
-              Close
-            </button>
-            <p className="globe-event-eyebrow">{selectedEyebrow}</p>
-            <h4
-              className="globe-event-title"
-              dir={hasHebrew(selectedTitle) ? "rtl" : "ltr"}
-              lang={hasHebrew(selectedTitle) ? "he" : "en"}
-            >
-              {selectedTitle}
-            </h4>
-            {selectedSummary && (
-              <p 
-                className="globe-event-summary"
-                dir={hasHebrew(selectedSummary) ? "rtl" : "ltr"}
-                lang={hasHebrew(selectedSummary) ? "he" : "en"}
-              >
-                {selectedSummary}
-              </p>
-            )}
-          </aside>
-        )}
       </div>
     </section>
   );
