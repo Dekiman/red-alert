@@ -31,6 +31,10 @@ export function createNewsRuntime(options) {
         nwsApiUrl: config.newsNwsApiUrl,
         weatherCanadaApiUrl: config.newsWeatherCanadaApiUrl,
         meteoalarmApiUrl: config.newsMeteoalarmApiUrl,
+        bbcRssApiUrl: config.newsBbcRssApiUrl,
+        twzApiUrl: config.newsTwzApiUrl,
+        defenseBlogApiUrl: config.newsDefenseBlogApiUrl,
+        unNewsApiUrl: config.newsUnNewsApiUrl,
         database,
         onNewsEvent
       }, reason);

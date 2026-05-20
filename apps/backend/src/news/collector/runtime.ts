@@ -32,6 +32,10 @@ export type NewsCollectionPipelineOptions = {
   nwsApiUrl?: string;
   weatherCanadaApiUrl?: string;
   meteoalarmApiUrl?: string;
+  bbcRssApiUrl?: string;
+  twzApiUrl?: string;
+  defenseBlogApiUrl?: string;
+  unNewsApiUrl?: string;
   database: {
     news: NewsRepository;
   };
@@ -101,8 +105,8 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
         ]
       : ["gdacs", "gdelt", "usgs", "official", "osint", "news", "disaster", "earthquake"],
     providerNames = includeWeatherEvents
-      ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm"]
-      : ["gdacs", "gdelt", "usgs"],
+      ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm", "bbc_rss", "the_war_zone", "defense_blog", "un_news"]
+      : ["gdacs", "gdelt", "usgs", "bbc_rss", "the_war_zone", "defense_blog", "un_news"],
     maxEventsPerProvider = 80,
     gdacsApiUrl,
     gdacsLookbackDays,
@@ -113,6 +117,10 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
     nwsApiUrl,
     weatherCanadaApiUrl,
     meteoalarmApiUrl,
+    bbcRssApiUrl,
+    twzApiUrl,
+    defenseBlogApiUrl,
+    unNewsApiUrl,
     database,
     onNewsEvent
   } = options;
@@ -179,6 +187,10 @@ export async function executeNewsCollectionPipeline(options: NewsCollectionPipel
     nwsApiUrl,
     weatherCanadaApiUrl,
     meteoalarmApiUrl,
+    bbcRssApiUrl,
+    twzApiUrl,
+    defenseBlogApiUrl,
+    unNewsApiUrl,
     logger: newsLogger
   });
 

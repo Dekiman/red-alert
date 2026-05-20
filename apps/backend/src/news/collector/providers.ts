@@ -4,12 +4,17 @@ import { createMeteoalarmProvider } from "./provider-meteoalarm.js";
 import { createNwsProvider } from "./provider-nws.js";
 import { createUsgsProvider } from "./provider-usgs.js";
 import { createWeatherCanadaProvider } from "./provider-weather-canada.js";
+import { createRssProvider } from "./provider-rss.js";
 import type { OsintNewsProvider } from "./provider-types.js";
 
 const DEFAULT_THROTTLES_MS: Record<string, number> = {
   usgs: 300_000, // 5 minutes
   gdacs: 60_000, // 1 minute
-  gdelt: 60_000 // 1 minute
+  gdelt: 60_000, // 1 minute
+  bbc_rss: 60_000, // 1 minute
+  the_war_zone: 60_000, // 1 minute
+  defense_blog: 60_000, // 1 minute
+  un_news: 60_000 // 1 minute
 };
 
 type CreateOsintProvidersOptions = {
@@ -27,6 +32,10 @@ type CreateOsintProvidersOptions = {
   nwsApiUrl: string;
   weatherCanadaApiUrl: string;
   meteoalarmApiUrl: string;
+  bbcRssApiUrl: string;
+  twzApiUrl: string;
+  defenseBlogApiUrl: string;
+  unNewsApiUrl: string;
   logger?: {
     warn?: (message: string, context?: Record<string, unknown>) => void;
   };
@@ -47,6 +56,10 @@ export function createOsintProviders({
   nwsApiUrl,
   weatherCanadaApiUrl,
   meteoalarmApiUrl,
+  bbcRssApiUrl,
+  twzApiUrl,
+  defenseBlogApiUrl,
+  unNewsApiUrl,
   logger
 }: CreateOsintProvidersOptions): OsintNewsProvider[] {
   const registry = new Map<string, OsintNewsProvider>([
@@ -103,6 +116,50 @@ export function createOsintProviders({
         apiUrl: meteoalarmApiUrl,
         maxEvents: maxEventsPerProvider
       })
+    ],
+    [
+      "bbc_rss",
+      createRssProvider({
+        name: "bbc_rss",
+        sourceName: "BBC News",
+        apiUrl: bbcRssApiUrl,
+        fetchText,
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.bbc_rss
+      })
+    ],
+    [
+      "the_war_zone",
+      createRssProvider({
+        name: "the_war_zone",
+        sourceName: "The War Zone",
+        apiUrl: twzApiUrl,
+        fetchText,
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.the_war_zone
+      })
+    ],
+    [
+      "defense_blog",
+      createRssProvider({
+        name: "defense_blog",
+        sourceName: "Defense Blog",
+        apiUrl: defenseBlogApiUrl,
+        fetchText,
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.defense_blog
+      })
+    ],
+    [
+      "un_news",
+      createRssProvider({
+        name: "un_news",
+        sourceName: "UN News",
+        apiUrl: unNewsApiUrl,
+        fetchText,
+        maxEvents: maxEventsPerProvider,
+        throttleMs: DEFAULT_THROTTLES_MS.un_news
+      })
     ]
   ]);
 
@@ -125,8 +182,8 @@ export function createOsintProviders({
   }
 
   const fallbackProviderNames = includeWeatherProviders
-    ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm"]
-    : ["gdacs", "gdelt", "usgs"];
+    ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm", "bbc_rss", "the_war_zone", "defense_blog", "un_news"]
+    : ["gdacs", "gdelt", "usgs", "bbc_rss", "the_war_zone", "defense_blog", "un_news"];
 
   if (resolvedProviders.length > 0) {
     return resolvedProviders;

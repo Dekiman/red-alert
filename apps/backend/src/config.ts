@@ -3,8 +3,8 @@ import type { Env } from "./env.js";
 export function createAppConfig(env: Env, _logger: any) {
   const newsIncludeWeather = env.RED_ALERT_NEWS_INCLUDE_WEATHER;
   const defaultNewsProviders = newsIncludeWeather
-    ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm"]
-    : ["gdacs", "gdelt", "usgs"];
+    ? ["gdacs", "gdelt", "usgs", "nws", "weather_canada", "meteoalarm", "bbc_rss", "the_war_zone", "defense_blog", "un_news"]
+    : ["gdacs", "gdelt", "usgs", "bbc_rss", "the_war_zone", "defense_blog", "un_news"];
   const defaultNewsSourceTypes = newsIncludeWeather
     ? [
         "gdacs",
@@ -13,6 +13,10 @@ export function createAppConfig(env: Env, _logger: any) {
         "nws",
         "weather_canada",
         "meteoalarm",
+        "bbc_rss",
+        "the_war_zone",
+        "defense_blog",
+        "un_news",
         "official",
         "osint",
         "news",
@@ -21,7 +25,7 @@ export function createAppConfig(env: Env, _logger: any) {
         "weather",
         "warning"
       ]
-    : ["gdacs", "gdelt", "usgs", "official", "osint", "news", "disaster", "earthquake"];
+    : ["gdacs", "gdelt", "usgs", "bbc_rss", "the_war_zone", "defense_blog", "un_news", "official", "osint", "news", "disaster", "earthquake"];
 
   return {
     websocketUrl: env.RED_ALERT_WS_URL,
@@ -54,6 +58,10 @@ export function createAppConfig(env: Env, _logger: any) {
     newsNwsApiUrl: env.RED_ALERT_NEWS_NWS_API_URL,
     newsWeatherCanadaApiUrl: env.RED_ALERT_NEWS_WEATHER_CANADA_API_URL,
     newsMeteoalarmApiUrl: env.RED_ALERT_NEWS_METEOALARM_API_URL,
+    newsBbcRssApiUrl: env.RED_ALERT_NEWS_BBC_RSS_API_URL,
+    newsTwzApiUrl: env.RED_ALERT_NEWS_TWZ_API_URL,
+    newsDefenseBlogApiUrl: env.RED_ALERT_NEWS_DEFENSE_BLOG_API_URL,
+    newsUnNewsApiUrl: env.RED_ALERT_NEWS_UN_NEWS_API_URL,
     localityMapEnabled: env.RED_ALERT_LOCALITY_MAP_ENABLED,
     localityMapListsVersionsUrl: env.RED_ALERT_LOCALITY_MAP_LISTS_VERSIONS_URL,
     localityMapCitiesUrl: env.RED_ALERT_LOCALITY_MAP_CITIES_URL,

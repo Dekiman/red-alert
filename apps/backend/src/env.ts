@@ -55,6 +55,10 @@ export const envSchema = z.object({
   RED_ALERT_NEWS_NWS_API_URL: z.string().default("https://api.weather.gov/alerts/active"),
   RED_ALERT_NEWS_WEATHER_CANADA_API_URL: z.string().default("https://api.weather.gc.ca/collections/weather-alerts/items?f=json"),
   RED_ALERT_NEWS_METEOALARM_API_URL: z.string().default("https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-rss-europe"),
+  RED_ALERT_NEWS_BBC_RSS_API_URL: z.string().default("https://feeds.bbci.co.uk/news/world/rss.xml"),
+  RED_ALERT_NEWS_TWZ_API_URL: z.string().default("https://www.twz.com/feed/"),
+  RED_ALERT_NEWS_DEFENSE_BLOG_API_URL: z.string().default("https://defence-blog.com/feed/"),
+  RED_ALERT_NEWS_UN_NEWS_API_URL: z.string().default("https://news.un.org/feed/subscribe/en/news/topic/peace-and-security/feed/rss.xml"),
 
   // Locality Map Config
   RED_ALERT_LOCALITY_MAP_ENABLED: booleanSchema(true),
