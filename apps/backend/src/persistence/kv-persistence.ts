@@ -86,6 +86,7 @@ export function createKVPersistence(options: KVPersistenceOptions): Persistence 
         const entry = {
           ...normalizedEvent,
           rawPayload,
+          eventType: normalizedEvent.eventType ?? existing?.eventType ?? categorizeNewsEventType(normalizedEvent),
           signals: existing?.signals ?? [],
           // Preserve URL fields if the incoming event has them; fall back to existing
           primarySignalUrl: (normalizedEvent as any).primarySignalUrl ?? existing?.primarySignalUrl ?? null,
@@ -149,7 +150,7 @@ export function createKVPersistence(options: KVPersistenceOptions): Persistence 
         if (fromUnix !== null && (ts === null || ts < fromUnix)) continue;
         if (toUnix !== null && (ts === null || ts > toUnix)) continue;
 
-        const eventType = (event as any).eventType;
+        const eventType = (event as any).eventType || categorizeNewsEventType(event);
         const severity = (event as any).severity;
 
         availableEventTypeCounts.set(eventType, (availableEventTypeCounts.get(eventType) ?? 0) + 1);
@@ -163,7 +164,10 @@ export function createKVPersistence(options: KVPersistenceOptions): Persistence 
         matchingCount++;
         if (matchingEvents.length < requestedLimit) {
           // Derive primarySignalUrl/primarySourceName from stored signals if not already on the event
-          const enriched = event as any;
+          const enriched = {
+            ...event,
+            eventType
+          } as any;
           if (!enriched.primarySignalUrl) {
             const firstSignal = enriched.signals?.[0];
             if (firstSignal?.url) enriched.primarySignalUrl = firstSignal.url;
