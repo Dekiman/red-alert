@@ -1,22 +1,61 @@
-export function categorizeNewsTitleType(newsEvent) {
-  const explicitType = String(newsEvent?.eventType ?? "").trim();
-  if (explicitType) {
-    return explicitType;
-  }
+const EARTHQUAKE_PATTERNS = [
+  "earthquake",
+  "seismic",
+  "tremor",
+  "quake",
+  "aftershock",
+  "magnitude",
+  "epicenter",
+  "richter"
+];
 
+const WEATHER_PATTERNS = [
+  "marine weather",
+  "small craft",
+  "gale",
+  "storm",
+  "thunderstorm",
+  "tornado",
+  "hurricane",
+  "typhoon",
+  "cyclone",
+  "blizzard",
+  "snow",
+  "ice",
+  "freezing rain",
+  "sleet",
+  "wind chill",
+  "heat",
+  "cold",
+  "fog",
+  "rain",
+  "flood",
+  "hail",
+  "fire weather",
+  "red flag",
+  "high surf",
+  "coastal flood"
+];
+
+function matchesAny(patterns: string[], text: string) {
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
+function isWeatherEvent(newsEvent: any): boolean {
+  const category = String(newsEvent?.category || "").toLowerCase();
+  const sourceTypesRaw = String(newsEvent?.sourceTypesRaw || "").toLowerCase();
+  const sourceTypes: string[] = Array.isArray(newsEvent?.sourceTypes)
+    ? newsEvent.sourceTypes.map((v: any) => String(v || "").toLowerCase())
+    : [];
   const title = String(newsEvent?.title || "").toLowerCase();
   const summary = String(newsEvent?.summary || "").toLowerCase();
-  const category = String(newsEvent?.category || "").toLowerCase();
   const text = `${title} ${summary}`.trim();
 
-  const matchesAny = (patterns) => patterns.some((pattern) => text.includes(pattern));
-  const sourceTypesRaw = String(newsEvent?.sourceTypesRaw || "").toLowerCase();
-  const sourceTypes = Array.isArray(newsEvent?.sourceTypes)
-    ? newsEvent.sourceTypes.map((value) => String(value || "").toLowerCase())
-    : [];
-
-  const hasWeatherSignal = () =>
+  return (
     category.includes("weather") ||
+    category.includes("cyclone") ||
+    category.includes("drought") ||
+    category.includes("wildfire") ||
     sourceTypesRaw.includes("weather") ||
     sourceTypesRaw.includes("nws") ||
     sourceTypesRaw.includes("weather_canada") ||
@@ -25,113 +64,54 @@ export function categorizeNewsTitleType(newsEvent) {
     sourceTypes.includes("nws") ||
     sourceTypes.includes("weather_canada") ||
     sourceTypes.includes("meteoalarm") ||
-    matchesAny([
-      "marine weather",
-      "small craft",
-      "gale",
-      "storm",
-      "thunderstorm",
-      "tornado",
-      "hurricane",
-      "typhoon",
-      "cyclone",
-      "blizzard",
-      "snow",
-      "ice",
-      "freezing rain",
-      "sleet",
-      "wind chill",
-      "heat",
-      "cold",
-      "fog",
-      "rain",
-      "flood",
-      "hail",
-      "fire weather",
-      "red flag",
-      "high surf",
-      "coastal flood"
-    ]);
-
-  if (
-    matchesAny([
-      "incident ended",
-      "all clear",
-      "resolved",
-      "no longer active",
-      "under control",
-      "threat removed",
-      "ceasefire",
-      "contained",
-      "lifted"
-    ])
-  ) {
-    return "Incident Ended";
-  }
-
-  if (hasWeatherSignal()) {
-    return "Weather Alert";
-  }
-
-  if (
-    matchesAny([
-      "evacuate",
-      "evacuation",
-      "shelter",
-      "warning",
-      "advisory",
-      "watch",
-      "stay indoors",
-      "seek shelter"
-    ])
-  ) {
-    return "Public Advisory";
-  }
-
-  if (matchesAny(["injured", "killed", "casualties", "fatalities", "deaths"])) {
-    return "Casualties Update";
-  }
-
-  if (matchesAny(["investigation", "probe", "suspect", "arrest"])) {
-    return "Investigation";
-  }
-
-  if (
-    matchesAny([
-      "reopened",
-      "restored",
-      "recovery",
-      "resumed",
-      "back online",
-      "return to normal"
-    ])
-  ) {
-    return "Recovery";
-  }
-
-  if (
-    matchesAny([
-      "breaking",
-      "new incident",
-      "attack",
-      "strike",
-      "explosion",
-      "fire",
-      "wildfire",
-      "missile",
-      "rocket",
-      "drone",
-      "earthquake",
-      "flood",
-      "sirens"
-    ])
-  ) {
-    return "Incident Ongoing";
-  }
-
-  if (category.includes("politic") || category.includes("diplom")) {
-    return "Political Update";
-  }
-
-  return "General Update";
+    matchesAny(WEATHER_PATTERNS, text)
+  );
 }
+
+function isEarthquakeEvent(newsEvent: any): boolean {
+  const category = String(newsEvent?.category || "").toLowerCase();
+  const sourceTypesRaw = String(newsEvent?.sourceTypesRaw || "").toLowerCase();
+  const sourceTypes: string[] = Array.isArray(newsEvent?.sourceTypes)
+    ? newsEvent.sourceTypes.map((v: any) => String(v || "").toLowerCase())
+    : [];
+  const title = String(newsEvent?.title || "").toLowerCase();
+  const summary = String(newsEvent?.summary || "").toLowerCase();
+  const text = `${title} ${summary}`.trim();
+
+  return (
+    category.includes("earthquake") ||
+    sourceTypesRaw.includes("usgs") ||
+    sourceTypes.includes("usgs") ||
+    matchesAny(EARTHQUAKE_PATTERNS, text)
+  );
+}
+
+function isNewsEvent(newsEvent: any): boolean {
+  const category = String(newsEvent?.category || "").toLowerCase();
+  const sourceTypesRaw = String(newsEvent?.sourceTypesRaw || "").toLowerCase();
+  const sourceTypes: string[] = Array.isArray(newsEvent?.sourceTypes)
+    ? newsEvent.sourceTypes.map((v: any) => String(v || "").toLowerCase())
+    : [];
+
+  return (
+    category.includes("news") ||
+    sourceTypesRaw.includes("gdelt") ||
+    sourceTypesRaw.includes("rss") ||
+    sourceTypes.includes("gdelt") ||
+    sourceTypes.includes("news")
+  );
+}
+
+export function categorizeNewsTitleType(newsEvent: any): string {
+  if (isEarthquakeEvent(newsEvent)) {
+    return "Earthquake";
+  }
+  if (isWeatherEvent(newsEvent)) {
+    return "Weather";
+  }
+  if (isNewsEvent(newsEvent)) {
+    return "News";
+  }
+  return "Other";
+}
+

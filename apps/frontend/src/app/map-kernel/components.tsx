@@ -237,6 +237,7 @@ export function Marker3D(props: any) {
           pointerDownPos.current = { x: e.clientX, y: e.clientY };
         }}
         onClick={(e) => {
+          if (e.delta > 2) return;
           e.stopPropagation();
           const dx = e.clientX - pointerDownPos.current.x;
           const dy = e.clientY - pointerDownPos.current.y;
@@ -597,6 +598,7 @@ export function AutoGeoBoundaryLayer(props: {
   };
 
   const handleClick = (e: any) => {
+    if (e.delta > 2) return;
     e.stopPropagation();
     
     // Check if the pointer moved significantly since onPointerDown
