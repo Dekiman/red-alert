@@ -151,7 +151,7 @@ export function MoonMarker({ date = new Date(), orbitRadius = 5 }: { date?: Date
  * Globe Component
  */
 export function Globe(props: any) {
-  const { radius = 1.2, date = new Date(), children } = props;
+  const { radius = 1.2, date = new Date(), children, globeRef } = props;
   const globeGroupRef = useRef<any>(null);
 
   const landMask = useTexture("/assets/land-mask.svg");
@@ -165,7 +165,7 @@ export function Globe(props: any) {
   return (
     <group ref={globeGroupRef}>
       {/* Water Sphere */}
-      <mesh>
+      <mesh ref={globeRef}>
         <sphereGeometry args={[radius, 112, 112]} />
         <meshStandardMaterial
           color="#0f1e2c"
@@ -223,7 +223,7 @@ export function Globe(props: any) {
  * Marker3D Component
  */
 export function Marker3D(props: any) {
-  const { lat, lng, radius = 1.2, altitude = 0.012, color = "#ff5837", scale = 1, isPulse = false, showHalo = false, onClick } = props;
+  const { lat, lng, radius = 1.2, altitude = 0.012, color = "#ff5837", scale = 1, isPulse = false, showHalo = false, onClick, children } = props;
   const position = useMemo(() => latLngToVector3(lat, lng, radius + altitude), [lat, lng, radius, altitude]);
   
   return (
@@ -249,6 +249,7 @@ export function Marker3D(props: any) {
           <meshBasicMaterial color={color} transparent opacity={0.3} />
         </mesh>
       )}
+      {children}
     </group>
   );
 }
@@ -531,7 +532,7 @@ export function AutoGeoBoundaryLayer(props: {
       });
   }, []);
 
-  const getCountryAtPoint = (point: Vector3, camera: THREE.Camera) => {
+  const getCountryAtPoint = (point: Vector3, camera: any) => {
     if (!topology) return null;
 
     const distance = camera.position.length();

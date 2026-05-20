@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
 import { 
   Globe, 
   Marker3D, 
@@ -16,14 +17,16 @@ import {
 } from "./components";
 import { getSubsolarPoint, latLngToVector3 } from "./math";
 import type { AlertPayload, NewsEventPayload } from "../contracts";
+import { formatNewsTime, hasHebrew } from "../text-utils";
 
 export interface DashboardMapProps {
   alerts: AlertPayload[];
   newsEvents: NewsEventPayload[];
   selectedEventId?: string | null;
+  selectedItem?: any;
   selectedCountry?: string | null;
   date?: Date;
-  onSelect?: (item: { kind: "news" | "alert"; id: string; payload: any }) => void;
+  onSelect?: (item: { kind: "news" | "alert"; id: string; payload: any } | null) => void;
   onSelectCountry?: (country: string | null) => void;
 }
 
@@ -39,10 +42,12 @@ function SunSynchronizer({ onSunDirChange, date = new Date() }: { onSunDirChange
   return null;
 }
 
-export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCountry, date = new Date(), onSelect, onSelectCountry }: DashboardMapProps) {
+export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedItem, selectedCountry, date = new Date(), onSelect, onSelectCountry }: DashboardMapProps) {
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [sunDirection, setSunDirection] = useState<[number, number, number]>([1, 0.2, 0.5]);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const globeRef = useRef<THREE.Mesh>(null);
+  const selectedAlertId = selectedItem?.kind === "alert" ? selectedItem.alert?.notificationId : null;
 
   const cameraProps = useMemo(() => ({ 
     position: [0, 0, 5.0] as [number, number, number], 
@@ -80,7 +85,7 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
         
         <SunSynchronizer onSunDirChange={setSunDirection} date={date} />
 
-        <Globe radius={1.2} date={date}>
+        <Globe radius={1.2} date={date} globeRef={globeRef}>
           <SunHighlight radius={1.2} sunDirection={sunDirection} />
           
           <BoundaryLayer 
@@ -116,8 +121,67 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
                   color={isSelected ? "#ff7648" : "#72d47d"}
                   scale={isSelected ? 1.2 : 1}
                   showHalo={isSelected}
-                  onClick={() => onSelect?.({ kind: "news", id: event.eventId, payload: event })}
-                />
+                  onClick={() => {
+                    console.log("newsMarker click registered for eventId:", event.eventId);
+                    onSelect?.({ kind: "news", id: event.eventId, payload: event });
+                  }}
+                >
+                  {isSelected && selectedItem?.kind === "news" && (
+                    <Html occlude={[globeRef]}>
+                      <div className="event-bubble-card">
+                        <button
+                          type="button"
+                          className="event-bubble-close"
+                          aria-label="Close details"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelect?.(null);
+                          }}
+                        >
+                          ✕
+                        </button>
+                        <p className="event-bubble-eyebrow">
+                          {(event.category || "news").toUpperCase()} · {formatNewsTime(event.updatedAtIso || event.createdAtIso)}
+                        </p>
+                        <h4
+                          className="event-bubble-title"
+                          dir={hasHebrew(event.title || "") ? "rtl" : "ltr"}
+                          lang={hasHebrew(event.title || "") ? "he" : "en"}
+                        >
+                          {event.title}
+                        </h4>
+                        {event.summary && event.summary !== event.title && (
+                          <p
+                            className="event-bubble-summary"
+                            dir={hasHebrew(event.summary) ? "rtl" : "ltr"}
+                            lang={hasHebrew(event.summary) ? "he" : "en"}
+                          >
+                            {event.summary}
+                          </p>
+                        )}
+                        <div className="event-bubble-meta">
+                          <span 
+                            className="event-bubble-location"
+                            dir={hasHebrew([event.locationName, event.region, event.country].filter(Boolean).join(" | ")) ? "rtl" : "ltr"}
+                          >
+                            {[event.locationName, event.region, event.country].filter(Boolean).join(" | ") || "Global event"}
+                          </span>
+                          {event.primarySignalUrl && (
+                            <a
+                              href={event.primarySignalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="event-bubble-link"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Open source
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </Html>
+                  )}
+                </Marker3D>
               );
             })}
           </group>
@@ -125,6 +189,7 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
           <group name="alertMarkers">
             {alerts.map((alert) => {
               if (!alert.notificationId) return null;
+              const isSelected = selectedAlertId === alert.notificationId;
               return (
                 <Marker3D 
                   key={alert.notificationId}
@@ -134,7 +199,39 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedCoun
                   isPulse={true}
                   showHalo={true}
                   onClick={() => onSelect?.({ kind: "alert", id: alert.notificationId, payload: alert })}
-                />
+                >
+                  {isSelected && (
+                    <Html occlude={[globeRef]}>
+                      <div className="event-bubble-card">
+                        <button
+                          type="button"
+                          className="event-bubble-close"
+                          aria-label="Close details"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelect?.(null);
+                          }}
+                        >
+                          ✕
+                        </button>
+                        <p className="event-bubble-eyebrow">
+                          LIVE ALERT · {alert.source}
+                        </p>
+                        <h4 className="event-bubble-title">
+                          Red Alert: {alert.locations?.[0] || "Unknown Location"}
+                        </h4>
+                        <p className="event-bubble-summary">
+                          {alert.threat} threat detected at {alert.locationCount} locations.
+                        </p>
+                        <div className="event-bubble-meta">
+                          <span className="event-bubble-location">
+                            {alert.locations?.slice(0, 3).join(", ") || "Israel"}
+                          </span>
+                        </div>
+                      </div>
+                    </Html>
+                  )}
+                </Marker3D>
               );
             })}
           </group>
