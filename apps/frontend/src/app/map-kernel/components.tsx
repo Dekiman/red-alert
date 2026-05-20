@@ -232,6 +232,7 @@ export function Marker3D(props: any) {
         scale={[0.01 * scale, 0.01 * scale, 0.01 * scale]} 
         renderOrder={30}
         onClick={(e) => {
+          if (e.delta > 2) return;
           e.stopPropagation();
           onClick?.();
         }}
@@ -579,6 +580,7 @@ export function AutoGeoBoundaryLayer(props: {
   };
 
   const handleClick = (e: any) => {
+    if (e.delta > 2) return;
     e.stopPropagation();
     const foundCountry = getCountryAtPoint(e.point, e.camera);
     onSelect?.(foundCountry);

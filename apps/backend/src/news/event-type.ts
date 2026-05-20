@@ -1,13 +1,12 @@
-const SAFE_PATTERNS = [
-  "incident ended",
-  "all clear",
-  "resolved",
-  "no longer active",
-  "under control",
-  "threat removed",
-  "ceasefire",
-  "contained",
-  "lifted"
+const EARTHQUAKE_PATTERNS = [
+  "earthquake",
+  "seismic",
+  "tremor",
+  "quake",
+  "aftershock",
+  "magnitude",
+  "epicenter",
+  "richter"
 ];
 
 const WEATHER_PATTERNS = [
@@ -38,46 +37,11 @@ const WEATHER_PATTERNS = [
   "coastal flood"
 ];
 
-const ADVISORY_PATTERNS = [
-  "evacuate",
-  "evacuation",
-  "shelter",
-  "warning",
-  "advisory",
-  "watch",
-  "stay indoors",
-  "seek shelter"
-];
-
-const CASUALTY_PATTERNS = ["injured", "killed", "casualties", "fatalities", "deaths"];
-const INVESTIGATION_PATTERNS = ["investigation", "probe", "suspect", "arrest"];
-const RECOVERY_PATTERNS = ["reopened", "restored", "recovery", "resumed", "back online", "return to normal"];
-const ONGOING_PATTERNS = [
-  "breaking",
-  "new incident",
-  "attack",
-  "strike",
-  "explosion",
-  "fire",
-  "wildfire",
-  "missile",
-  "rocket",
-  "drone",
-  "earthquake",
-  "flood",
-  "sirens"
-];
-
 export const KNOWN_NEWS_EVENT_TYPES = [
-  "Incident Ongoing",
-  "General Update",
-  "Political Update",
-  "Public Advisory",
-  "Casualties Update",
-  "Investigation",
-  "Incident Ended",
-  "Weather Alert",
-  "Recovery"
+  "News",
+  "Earthquake",
+  "Weather",
+  "Other"
 ];
 
 function matchesAny(text: string, patterns: string[]) {
@@ -102,6 +66,9 @@ export function isWeatherNewsEvent(newsEvent: {
 
   return (
     category.includes("weather") ||
+    category.includes("cyclone") ||
+    category.includes("drought") ||
+    category.includes("wildfire") ||
     sourceTypesRaw.includes("weather") ||
     sourceTypesRaw.includes("nws") ||
     sourceTypesRaw.includes("weather_canada") ||
@@ -114,6 +81,50 @@ export function isWeatherNewsEvent(newsEvent: {
   );
 }
 
+export function isEarthquakeNewsEvent(newsEvent: {
+  title?: string | null;
+  summary?: string | null;
+  category?: string | null;
+  sourceTypes?: string[] | null;
+  sourceTypesRaw?: string | null;
+}) {
+  const title = String(newsEvent?.title || "").toLowerCase();
+  const summary = String(newsEvent?.summary || "").toLowerCase();
+  const category = String(newsEvent?.category || "").toLowerCase();
+  const sourceTypesRaw = String(newsEvent?.sourceTypesRaw || "").toLowerCase();
+  const sourceTypes = Array.isArray(newsEvent?.sourceTypes)
+    ? newsEvent.sourceTypes.map((value) => String(value || "").toLowerCase())
+    : [];
+  const text = `${title} ${summary}`.trim();
+
+  return (
+    category.includes("earthquake") ||
+    sourceTypesRaw.includes("usgs") ||
+    sourceTypes.includes("usgs") ||
+    matchesAny(text, EARTHQUAKE_PATTERNS)
+  );
+}
+
+export function isNewsEvent(newsEvent: {
+  category?: string | null;
+  sourceTypes?: string[] | null;
+  sourceTypesRaw?: string | null;
+}) {
+  const category = String(newsEvent?.category || "").toLowerCase();
+  const sourceTypesRaw = String(newsEvent?.sourceTypesRaw || "").toLowerCase();
+  const sourceTypes = Array.isArray(newsEvent?.sourceTypes)
+    ? newsEvent.sourceTypes.map((value) => String(value || "").toLowerCase())
+    : [];
+
+  return (
+    category.includes("news") ||
+    sourceTypesRaw.includes("gdelt") ||
+    sourceTypesRaw.includes("rss") ||
+    sourceTypes.includes("gdelt") ||
+    sourceTypes.includes("news")
+  );
+}
+
 export function categorizeNewsEventType(newsEvent: {
   title?: string | null;
   summary?: string | null;
@@ -122,49 +133,22 @@ export function categorizeNewsEventType(newsEvent: {
   sourceTypes?: string[] | null;
   sourceTypesRaw?: string | null;
 }) {
-  const explicitType = String(newsEvent?.eventType ?? "").trim();
-  if (explicitType) {
-    return explicitType;
+  // Earthquake takes top priority — it's unambiguous
+  if (isEarthquakeNewsEvent(newsEvent)) {
+    return "Earthquake";
   }
 
-  const title = String(newsEvent?.title || "").toLowerCase();
-  const summary = String(newsEvent?.summary || "").toLowerCase();
-  const category = String(newsEvent?.category || "").toLowerCase();
-  const text = `${title} ${summary}`.trim();
-
-  if (matchesAny(text, SAFE_PATTERNS)) {
-    return "Incident Ended";
-  }
-
+  // Weather next — dedicated weather sources / patterns
   if (isWeatherNewsEvent(newsEvent)) {
-    return "Weather Alert";
+    return "Weather";
   }
 
-  if (matchesAny(text, ADVISORY_PATTERNS)) {
-    return "Public Advisory";
+  // News — GDELT, RSS, and news-category sourced events
+  if (isNewsEvent(newsEvent)) {
+    return "News";
   }
 
-  if (matchesAny(text, CASUALTY_PATTERNS)) {
-    return "Casualties Update";
-  }
-
-  if (matchesAny(text, INVESTIGATION_PATTERNS)) {
-    return "Investigation";
-  }
-
-  if (matchesAny(text, RECOVERY_PATTERNS)) {
-    return "Recovery";
-  }
-
-  if (matchesAny(text, ONGOING_PATTERNS)) {
-    return "Incident Ongoing";
-  }
-
-  if (category.includes("politic") || category.includes("diplom")) {
-    return "Political Update";
-  }
-
-  return "General Update";
+  return "Other";
 }
 
 export function compareNewsEventTypes(left: string, right: string) {

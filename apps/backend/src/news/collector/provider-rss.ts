@@ -127,6 +127,34 @@ export function createRssProvider({
           }
         };
 
+        let lat: number | null = null;
+        let lng: number | null = null;
+        
+        const geoLatMatch = extractXmlTagValue(itemBlock, "geo:lat");
+        const geoLngMatch = extractXmlTagValue(itemBlock, "geo:long");
+        
+        if (geoLatMatch && geoLngMatch) {
+          const parsedLat = Number(geoLatMatch);
+          const parsedLng = Number(geoLngMatch);
+          if (Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
+            lat = parsedLat;
+            lng = parsedLng;
+          }
+        } else {
+          const pointMatch = extractXmlTagValue(itemBlock, "georss:point");
+          if (pointMatch) {
+            const parts = pointMatch.trim().split(/\s+/);
+            if (parts.length === 2) {
+              const parsedLat = Number(parts[0]);
+              const parsedLng = Number(parts[1]);
+              if (Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
+                lat = parsedLat;
+                lng = parsedLng;
+              }
+            }
+          }
+        }
+
         collected.push({
           event: {
             eventId,
@@ -141,8 +169,8 @@ export function createRssProvider({
             locationName: null,
             country: null,
             region: null,
-            lat: null,
-            lng: null,
+            lat,
+            lng,
             createdAtIso: updatedAtIso,
             updatedAtIso,
             fetchedAtIso: nowIso

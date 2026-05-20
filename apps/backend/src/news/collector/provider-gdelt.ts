@@ -126,6 +126,8 @@ export function createGdeltProvider({
           }
         };
 
+        const countryName = normalizeWhitespace(article?.sourcecountry) || null;
+
         collected.push({
           event: {
             eventId,
@@ -138,7 +140,7 @@ export function createGdeltProvider({
             signalCount: 1,
             isActive: true,
             locationName: null,
-            country: null,
+            country: countryName,
             region: null,
             lat: null,
             lng: null,

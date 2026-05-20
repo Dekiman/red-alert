@@ -76,6 +76,8 @@ export const { registry } = defineRegistry(uiCatalog, {
       const titleType = categorizeNewsTitleType(newsEvent as any);
       const titleText = newsEvent.title || "Untitled event";
       const titleDir = hasHebrew(titleText) ? "rtl" : "ltr";
+      const url = newsEvent.primarySignalUrl ?? null;
+      const sourceName = newsEvent.primarySourceName ?? null;
 
       const cleanedSummary = newsEvent.summary ? cleanAndLimitSummary(newsEvent.summary) : "";
       const summaryText =
@@ -86,66 +88,94 @@ export const { registry } = defineRegistry(uiCatalog, {
       
       const isCritical = newsEvent.severity && newsEvent.severity >= 4;
 
+      // Category badge colour
+      const categoryColors: Record<string, string> = {
+        "Earthquake": "bg-orange-500/15 text-orange-400 border-orange-500/30",
+        "Weather":    "bg-sky-500/15 text-sky-400 border-sky-500/30",
+        "News":       "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+        "Other":      "bg-white/5 text-muted-foreground border-white/10",
+      };
+      const categoryColor = categoryColors[titleType] ?? categoryColors["Other"];
+
       return (
-        <Card className="group relative border border-white/10 bg-black/40 p-0 transition-colors duration-200 hover:border-emerald-500/30 min-h-[180px]">
-          <div className="flex flex-col gap-3 p-4 flex-1">
-            <div className="flex justify-between items-center gap-2 mb-1">
-              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-500">
-                {(newsEvent.category || "News").toUpperCase()}
-              </span>
-              <span className="text-[11px] font-mono font-medium text-muted-foreground tabular-nums tracking-tight opacity-70">
-                {formatNewsTime(newsEvent.updatedAtIso || newsEvent.createdAtIso)}
-              </span>
+        <Card className="group relative border border-white/10 bg-black/40 p-0 transition-all duration-200 hover:border-white/20 hover:bg-black/60">
+          <div className="flex flex-col gap-0 p-0">
+            {/* Header row: category + source + time */}
+            <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border shrink-0 ${categoryColor}`}>
+                  {titleType}
+                </span>
+                {sourceName && (
+                  <span className="text-[10px] font-semibold text-muted-foreground truncate max-w-[120px]">
+                    {sourceName}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isCritical && (
+                  <span className="inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 tabular-nums">
+                    Sev {newsEvent.severity}
+                  </span>
+                )}
+                <span className="text-[10px] font-mono text-muted-foreground tabular-nums opacity-60">
+                  {formatNewsTime(newsEvent.updatedAtIso || newsEvent.createdAtIso)}
+                </span>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              {newsEvent.primarySignalUrl ? (
-                <a 
-                  href={newsEvent.primarySignalUrl}
+            {/* Title — full-width clickable link when URL available */}
+            <div className="px-4 pb-2">
+              {url ? (
+                <a
+                  href={url}
                   target="_blank"
                   rel="noreferrer"
-                  className={`text-sm font-bold leading-tight text-slate-100 hover:text-emerald-400 focus-visible:ring-1 focus-visible:ring-emerald-500 focus-visible:outline-none transition-colors duration-200 ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"} text-pretty`}
+                  className={`group/link flex items-start gap-1.5 text-sm font-semibold leading-snug text-slate-100 hover:text-emerald-300 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 rounded ${titleDir === "rtl" ? "text-right font-hebrew flex-row-reverse" : "text-left"} text-pretty`}
                 >
-                  {titleText}
+                  <span>{titleText}</span>
+                  <svg className="w-3 h-3 mt-0.5 shrink-0 opacity-40 group-hover/link:opacity-80 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
                 </a>
               ) : (
-                <p className={`text-sm font-bold leading-tight text-slate-100 ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"} text-pretty`}>
+                <p className={`text-sm font-semibold leading-snug text-slate-100 ${titleDir === "rtl" ? "text-right font-hebrew" : "text-left"} text-pretty`}>
                   {titleText}
-                </p>
-              )}
-
-              {locationText && (
-                <p className={`text-[11px] font-medium text-emerald-500/80 tracking-tight ${hasHebrew(locationText) ? "text-right font-hebrew" : "text-left"}`}>
-                  {locationText}
                 </p>
               )}
             </div>
 
-            {summaryText && (
-              <p className={`text-[12px] leading-relaxed text-slate-400 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"} text-pretty`}>
-                {summaryText}
-              </p>
+            {/* Location */}
+            {locationText && (
+              <div className="px-4 pb-1.5">
+                <p className={`text-[11px] font-medium text-emerald-500/70 tracking-tight ${hasHebrew(locationText) ? "text-right font-hebrew" : "text-left"}`}>
+                  📍 {locationText}
+                </p>
+              </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5 mt-auto">
-              <span className="inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/5 text-muted-foreground border border-white/10">
-                {titleType || "General"}
+            {/* Summary */}
+            {summaryText && (
+              <div className="px-4 pb-3">
+                <p className={`text-[12px] leading-relaxed text-slate-400 ${hasHebrew(summaryText) ? "text-right font-hebrew" : "text-left"} text-pretty`}>
+                  {summaryText}
+                </p>
+              </div>
+            )}
+
+            {/* Footer: signals count + open source link */}
+            <div className="flex items-center justify-between px-4 py-2 border-t border-white/5 mt-auto">
+              <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest opacity-40 tabular-nums">
+                Signals: {newsEvent.signalCount ?? 0}
               </span>
-              <span className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border tabular-nums ${isCritical ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"}`}>
-                Sev:&nbsp;{newsEvent.severity ?? "0"}
-              </span>
-              <span className="inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/5 text-muted-foreground border border-white/10 tabular-nums">
-                Signals:&nbsp;{newsEvent.signalCount ?? 0}
-              </span>
-              
-              {newsEvent.primarySignalUrl && (
-                <a 
-                  href={newsEvent.primarySignalUrl}
+              {url && (
+                <a
+                  href={url}
                   target="_blank"
                   rel="noreferrer"
-                  className="ml-auto text-[10px] font-bold text-emerald-500 hover:text-emerald-400 focus-visible:underline focus-visible:outline-none transition-colors duration-200 uppercase tracking-widest"
+                  className="text-[10px] font-bold text-emerald-500 hover:text-emerald-300 transition-colors duration-150 uppercase tracking-widest focus-visible:outline-none focus-visible:underline"
                 >
-                  Source&nbsp;↗
+                  Open source ↗
                 </a>
               )}
             </div>

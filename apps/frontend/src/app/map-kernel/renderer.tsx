@@ -116,8 +116,8 @@ export function DashboardMap({ alerts, newsEvents, selectedEventId, selectedItem
               return (
                 <Marker3D 
                   key={event.eventId}
-                  lat={event.lat ?? 0}
-                  lng={event.lng ?? 0}
+                  lat={event.lat as number}
+                  lng={event.lng as number}
                   color={isSelected ? "#ff7648" : "#72d47d"}
                   scale={isSelected ? 1.2 : 1}
                   showHalo={isSelected}

@@ -2,7 +2,7 @@ export function hasHebrew(text) {
   return /[\u0590-\u05FF]/.test(text || "");
 }
 
-export function normalizeLocationText(text) {
+export function normalizeLocationText(text: unknown) {
   return String(text || "")
     .toLowerCase()
     .replace(/["'`’]/g, "")
@@ -11,7 +11,86 @@ export function normalizeLocationText(text) {
     .trim();
 }
 
-export function setDirection(node, text) {
+const COUNTRY_ALIASES: Record<string, string> = {
+  "usa": "united states of america",
+  "us": "united states of america",
+  "united states": "united states of america",
+  "america": "united states of america",
+  "the united states": "united states of america",
+  "united states of america": "united states of america",
+  "uk": "united kingdom",
+  "great britain": "united kingdom",
+  "britain": "united kingdom",
+  "the united kingdom": "united kingdom",
+  "england": "united kingdom",
+  "scotland": "united kingdom",
+  "wales": "united kingdom",
+  "northern ireland": "united kingdom",
+  "uae": "united arab emirates",
+  "emirates": "united arab emirates",
+  "russian federation": "russia",
+  "prc": "china",
+  "peoples republic of china": "china",
+  "rok": "south korea",
+  "republic of korea": "south korea",
+  "korea republic of": "south korea",
+  "dprk": "north korea",
+  "democratic peoples republic of korea": "north korea",
+  "korea democratic peoples republic of": "north korea",
+  "state of israel": "israel",
+  "state of palestine": "palestine",
+  "palestinian territory": "palestine",
+  "palestinian territories": "palestine",
+  "syrian arab republic": "syria",
+  "islamic republic of iran": "iran",
+  "czech republic": "czechia",
+  "democratic republic of the congo": "dem rep congo",
+  "democratic republic of congo": "dem rep congo",
+  "congo the democratic republic of the": "dem rep congo",
+  "dr congo": "dem rep congo",
+  "drc": "dem rep congo",
+  "congo kinshasa": "dem rep congo",
+  "zaire": "dem rep congo",
+  "republic of the congo": "congo",
+  "republic of congo": "congo",
+  "congo republic": "congo",
+  "congo brazzaville": "congo",
+  "congo republic of the": "congo",
+  "ivory coast": "côte divoire",
+  "cote divoire": "côte divoire",
+  "cote d ivoire": "côte divoire",
+  "republic of cote divoire": "côte divoire",
+  "swaziland": "eswatini",
+  "south sudan": "s sudan",
+  "republic of south sudan": "s sudan",
+  "dominican republic": "dominican rep",
+  "central african republic": "central african rep",
+  "car": "central african rep",
+  "bosnia and herzegovina": "bosnia and herz",
+  "bosnia": "bosnia and herz",
+  "macedonia": "macedonia",
+  "north macedonia": "macedonia",
+  "republic of north macedonia": "macedonia",
+  "turkiye": "turkey",
+  "venezuela bolivarian republic of": "venezuela",
+  "viet nam": "vietnam",
+  "bolivia plurinational state of": "bolivia",
+  "tanzania united republic of": "tanzania",
+  "micronesia federated states of": "micronesia",
+  "moldova republic of": "moldova",
+  "bahamas the": "bahamas",
+  "the bahamas": "bahamas",
+  "gambia the": "gambia",
+  "the gambia": "gambia",
+  "sao tome and principe": "são tomé and principe"
+};
+
+export function getCanonicalCountryName(text: unknown): string {
+  const normalized = normalizeLocationText(text);
+  return COUNTRY_ALIASES[normalized] || normalized;
+}
+
+export function setDirection(node: any, text: string) {
   if (!node) {
     return;
   }

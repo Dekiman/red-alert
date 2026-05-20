@@ -70,10 +70,18 @@ export function createKVPersistence(options: KVPersistenceOptions): Persistence 
       console.log(`[KVPersistence] Saving news event: ${normalizedEvent.eventId}`);
       const events = await this._getAllRaw();
       const index = events.findIndex((e: any) => e.eventId === normalizedEvent.eventId);
-      const entry = { ...normalizedEvent, rawPayload, signals: (events[index] as any)?.signals ?? [] };
+      const existing = events[index] as any;
+      const entry = {
+        ...normalizedEvent,
+        rawPayload,
+        signals: existing?.signals ?? [],
+        // Preserve URL fields if the incoming event has them; fall back to existing
+        primarySignalUrl: (normalizedEvent as any).primarySignalUrl ?? existing?.primarySignalUrl ?? null,
+        primarySourceName: (normalizedEvent as any).primarySourceName ?? existing?.primarySourceName ?? null,
+      };
 
       if (index >= 0) {
-        events[index] = { ...events[index], ...entry };
+        events[index] = { ...existing, ...entry };
       } else {
         events.unshift(entry as any);
       }
@@ -140,7 +148,14 @@ export function createKVPersistence(options: KVPersistenceOptions): Persistence 
 
         matchingCount++;
         if (matchingEvents.length < requestedLimit) {
-          matchingEvents.push(event as any);
+          // Derive primarySignalUrl/primarySourceName from stored signals if not already on the event
+          const enriched = event as any;
+          if (!enriched.primarySignalUrl) {
+            const firstSignal = enriched.signals?.[0];
+            if (firstSignal?.url) enriched.primarySignalUrl = firstSignal.url;
+            if (firstSignal?.sourceName && !enriched.primarySourceName) enriched.primarySourceName = firstSignal.sourceName;
+          }
+          matchingEvents.push(enriched);
         }
       }
 
