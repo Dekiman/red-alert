@@ -2,7 +2,7 @@ import React from "react";
 import { defineRegistry } from "@json-render/react";
 import { shadcnComponents } from "@json-render/shadcn";
 import { uiCatalog } from "./ui-catalog";
-import { formatTime, formatNewsTime, hasHebrew } from "./text-utils";
+import { formatTime, formatNewsTime, hasHebrew, cleanAndLimitSummary } from "./text-utils";
 import { categorizeNewsTitleType } from "./news-categorizer";
 
 import { Card } from "../components/ui/card";
@@ -77,8 +77,9 @@ export const { registry } = defineRegistry(uiCatalog, {
       const titleText = newsEvent.title || "Untitled event";
       const titleDir = hasHebrew(titleText) ? "rtl" : "ltr";
 
+      const cleanedSummary = newsEvent.summary ? cleanAndLimitSummary(newsEvent.summary) : "";
       const summaryText =
-        newsEvent.summary && newsEvent.summary !== newsEvent.title ? String(newsEvent.summary) : null;
+        cleanedSummary && cleanedSummary !== newsEvent.title ? cleanedSummary : null;
       
       const locationParts = [newsEvent.locationName, newsEvent.region, newsEvent.country].filter(Boolean);
       const locationText = locationParts.length > 0 ? locationParts.join(" | ") : null;

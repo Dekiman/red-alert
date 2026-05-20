@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   clampSeverity,
+  cleanAndLimitSummary,
   decodeXmlEntities,
   dedupeStrings,
   normalizeWhitespace,
@@ -84,7 +85,7 @@ export function createRssProvider({
 
         const cleanLink = link ? normalizeWhitespace(link) : "";
         const cleanTitle = title ? normalizeWhitespace(title) : "";
-        const cleanDescription = description ? normalizeWhitespace(description) : "";
+        const cleanDescription = description ? cleanAndLimitSummary(description) : "";
 
         // Keyword filter check (case-insensitive)
         const combinedText = `${cleanTitle} ${cleanDescription}`.toLowerCase();

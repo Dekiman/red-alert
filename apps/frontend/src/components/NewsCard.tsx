@@ -1,5 +1,5 @@
 import type { NewsEvent } from "@red-alert/shared";
-import { formatNewsTime, hasHebrew } from "../app/text-utils";
+import { formatNewsTime, hasHebrew, cleanAndLimitSummary } from "../app/text-utils";
 import { categorizeNewsTitleType } from "../app/news-categorizer";
 
 export function NewsCard({ newsEvent }: { newsEvent: NewsEvent }) {
@@ -11,8 +11,9 @@ export function NewsCard({ newsEvent }: { newsEvent: NewsEvent }) {
   const titleDir = hasHebrew(titleText) ? "rtl" : "ltr";
   const titleLang = hasHebrew(titleText) ? "he" : "en";
 
+  const cleanedSummary = newsEvent.summary ? cleanAndLimitSummary(newsEvent.summary) : "";
   const summaryText =
-    newsEvent.summary && newsEvent.summary !== newsEvent.title ? String(newsEvent.summary) : null;
+    cleanedSummary && cleanedSummary !== newsEvent.title ? cleanedSummary : null;
   const locationParts = [newsEvent.locationName, newsEvent.region, newsEvent.country].filter(Boolean);
   const locationText = locationParts.length > 0 ? locationParts.join(" | ") : null;
 
