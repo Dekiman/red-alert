@@ -865,8 +865,8 @@ export function App() {
               <div className="topbar-main">
                 <div className="topbar-copy">
                   <p className="topbar-eyebrow">Realtime watchfloor</p>
-                  <h1 className="title">Red Alert UPDATED + Live News</h1>
-                  <p className="subtitle">Realtime Israeli alert state and worldwide incident flow on a live 3D globe.</p>
+                  <h1 className="title">Red Alert + Live News</h1>
+                  <p className="subtitle">Realtime worldwide incident flow on a live 3D globe.</p>
                 </div>
 
                 <div className="topbar-side">
